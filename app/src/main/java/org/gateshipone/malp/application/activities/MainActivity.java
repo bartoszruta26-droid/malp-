@@ -95,7 +95,7 @@ import org.gateshipone.malp.application.fragments.serverfragments.SongDetailsDia
 import org.gateshipone.malp.application.fragments.serverfragments.TagSelectFragment;
 import org.gateshipone.malp.application.utils.PermissionHelper;
 import org.gateshipone.malp.application.utils.ThemeUtils;
-import org.gateshipone.malp.application.views.CurrentPlaylistView;
+import org.gateshipone.malp.application.views.CurrentPlaylistView;\nimport org.gateshipone.malp.application.youtube.YouTubeShareParser;\nimport org.gateshipone.malp.application.youtube.YouTubeAudioBridgeClient;\nimport org.gateshipone.malp.application.youtube.YouTubeBridgePreferences;\nimport java.io.IOException;\nimport java.util.List;\nimport java.util.concurrent.ExecutorService;\nimport java.util.concurrent.Executors;
 import org.gateshipone.malp.application.views.NowPlayingView;
 import org.gateshipone.malp.mpdservice.ConnectionManager;
 import org.gateshipone.malp.mpdservice.handlers.MPDConnectionStateChangeHandler;
@@ -155,44 +155,22 @@ public class MainActivity extends GenericActivity
     protected void onCreate(Bundle savedInstanceState) {
         boolean switchToSettings = false;
 
-        // restore drag state
+        // Resolve incoming shares after the Activity is initialized. YouTube links
+        // are handled by the local Raspberry Pi bridge; ordinary URLs retain the
+        // existing MPD external-stream behavior.
         if (savedInstanceState != null) {
             mSavedNowPlayingDragStatus = DRAG_STATUS.values()[savedInstanceState.getInt(MAINACTIVITY_SAVED_INSTANCE_NOW_PLAYING_DRAG_STATUS)];
             mSavedNowPlayingViewSwitcherStatus = VIEW_SWITCHER_STATUS.values()[savedInstanceState.getInt(MAINACTIVITY_SAVED_INSTANCE_NOW_PLAYING_VIEW_SWITCHER_CURRENT_VIEW)];
         } else {
-            // if no savedInstanceState is present the activity is started for the first time so check the intent
             final Intent intent = getIntent();
-
             if (intent != null) {
-                // odyssey was opened by widget or notification
                 final Bundle extras = intent.getExtras();
-
                 if (extras != null) {
                     REQUESTEDVIEW requestedView = REQUESTEDVIEW.values()[extras.getInt(MAINACTIVITY_INTENT_EXTRA_REQUESTEDVIEW, REQUESTEDVIEW.NONE.ordinal())];
                     switch (requestedView) {
-                        case NONE:
-                            break;
-                        case NOWPLAYING:
-                            mShowNPV = true;
-                            break;
-                        case SETTINGS:
-                            switchToSettings = true;
-                            break;
-                    }
-
-                    if (Intent.ACTION_SEND.equals(intent.getAction())) {
-                        String textData = extras.getString(Intent.EXTRA_TEXT);
-                        if (textData != null && !textData.isBlank()) {
-                            // try to parse it as a URL
-                            try {
-                                URL url = new URL(textData);
-                                mConnectionStateListener = new ServerConnectionListener(url.toString(), getMainLooper());
-                                MPDInterface.getGenericInstance().addMPDConnectionStateChangeListener(mConnectionStateListener);
-                            }
-                            catch (MalformedURLException ignored) {
-                                // ignored
-                            }
-                        }
+                        case NONE: break;
+                        case NOWPLAYING: mShowNPV = true; break;
+                        case SETTINGS: switchToSettings = true; break;
                     }
                 }
             }
@@ -293,6 +271,9 @@ public class MainActivity extends GenericActivity
 
         mCollapsingImage = findViewById(R.id.collapsing_image);
         mCollapsingImageLayout = findViewById(R.id.appbar_image_layout);
+
+        handleIncomingShare(getIntent());
+
     }
 
     @Override
