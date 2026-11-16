@@ -100,4 +100,12 @@ bash -n tests/yoinks-mpd/test-yt-dlp-to-fifo.sh
 bash tests/yoinks-mpd/test-yt-dlp-to-fifo.sh
 ```
 
-**Execution status:** the test file has been committed, but it has not yet been executed in a Bash environment in this work session. Its results must be recorded only after execution. It does not establish MPD FIFO input compatibility or end-to-end playback.
+**Execution status:** the user executed the following commands on the Raspberry Pi checkout and reported successful completion:
+
+```bash
+bash -n scripts/yoinks-mpd/yt-dlp-to-fifo.sh
+bash -n tests/yoinks-mpd/test-yt-dlp-to-fifo.sh
+bash tests/yoinks-mpd/test-yt-dlp-to-fifo.sh
+```
+
+All six reported cases passed: binary FIFO transfer and cleanup; playlist rejection; lookalike-host rejection; preservation of existing files; symlink rejection; and yt-dlp failure propagation with cleanup. This is user-reported target-device execution, not an independently reproduced run in the development environment. It does not establish MPD FIFO input compatibility or end-to-end playback.
