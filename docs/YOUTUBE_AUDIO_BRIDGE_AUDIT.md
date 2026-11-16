@@ -66,3 +66,19 @@ The original Yoinks TUI must not be assumed to provide non-interactive stdout st
 ## Test status
 
 No Bash syntax test, FIFO consumer test, MPD playback test, Raspberry Pi test, Android build or emulator test is claimed by this audit. These require execution in a suitable environment. The GitHub file commits only establish that the source files were written to the feature branch.
+
+
+## Raspberry Pi installer
+
+Added:
+- scripts/yoinks-mpd/install.sh — APT prerequisite bootstrapper; downloads the official architecture-specific standalone yt-dlp release, verifies SHA-256 against upstream SHA2-256SUMS, installs the binary and producer script, and runs version/syntax checks.
+- docs/yoinks-mpd/INSTALL_RASPBERRY_PI.md — step-by-step Raspberry Pi OS/Debian installation and safe verification guide.
+
+Safety boundary:
+- Does not install, restart, reconfigure or alter MPD.
+- Does not alter the MPD queue or expose a network service.
+- Does not install Python packages or a system Python runtime.
+- Does not claim end-to-end playback. MPD FIFO input remains a target-device compatibility proof.
+- Supports aarch64, armv7l and x86_64; unsupported architectures fail closed.
+
+The installer has not been executed on Raspberry Pi hardware in this environment. Target-device download, checksum and runtime verification remain pending.
