@@ -17,7 +17,7 @@ command -v apt-get >/dev/null 2>&1 || fail "APT-based Debian/Raspberry Pi OS is 
 command -v curl >/dev/null 2>&1 || fail "curl is required"
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-root=$(cd -- "$script_dir/../../.." && pwd)
+root=$(cd -- "$script_dir/../.." && pwd)
 producer="$root/$SOURCE"
 [[ -f "$producer" ]] || fail "repository checkout is incomplete; missing $SOURCE"
 
