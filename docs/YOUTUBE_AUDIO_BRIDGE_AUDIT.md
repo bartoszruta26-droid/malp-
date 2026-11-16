@@ -82,3 +82,22 @@ Safety boundary:
 - Supports aarch64, armv7l and x86_64; unsupported architectures fail closed.
 
 The installer has not been executed on Raspberry Pi hardware in this environment. Target-device download, checksum and runtime verification remain pending.
+
+
+## Offline regression tests — next implementation increment
+
+Added `tests/yoinks-mpd/test-yt-dlp-to-fifo.sh`. It runs against a mock `yt-dlp` executable and does not contact YouTube or issue commands to MPD. The cases cover:
+- byte-for-byte transfer through a FIFO and separation of diagnostics onto stderr;
+- rejection of playlist URLs and lookalike YouTube hosts;
+- preservation of existing regular files and symlink targets;
+- propagation of a non-zero yt-dlp exit status and cleanup of the producer-owned FIFO.
+
+Run with:
+
+```bash
+bash -n scripts/yoinks-mpd/yt-dlp-to-fifo.sh
+bash -n tests/yoinks-mpd/test-yt-dlp-to-fifo.sh
+bash tests/yoinks-mpd/test-yt-dlp-to-fifo.sh
+```
+
+**Execution status:** the test file has been committed, but it has not yet been executed in a Bash environment in this work session. Its results must be recorded only after execution. It does not establish MPD FIFO input compatibility or end-to-end playback.
