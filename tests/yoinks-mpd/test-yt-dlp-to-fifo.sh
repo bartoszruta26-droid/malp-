@@ -14,7 +14,7 @@ export MOCK_YTDLP_MODE=success
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 pass() { printf 'PASS: %s\n' "$*"; }
 
-[[ -x "$PRODUCER" ]] || fail "producer is missing or not executable"
+[[ -f bash "$PRODUCER" ]] || fail "producer is missing"
 command -v bash >/dev/null
 command -v cmp >/dev/null
 command -v mkfifo >/dev/null
@@ -44,7 +44,7 @@ printf 'YOINKS_TEST_AUDIO_BYTES\000\377' > "$EXPECTED"
 # Successful stream: a separate reader consumes the FIFO.
 FIFO="$TMP/audio.fifo"
 OUTPUT="$TMP/output.bin"
-"$PRODUCER" "$VIDEO_URL" "$FIFO" 2>"$TMP/producer.stderr" &
+bash "$PRODUCER" "$VIDEO_URL" "$FIFO" 2>"$TMP/producer.stderr" &
 producer_pid=$!
 for _ in {1..100}; do
   [[ -p "$FIFO" ]] && break
@@ -64,14 +64,14 @@ grep -q 'mock yt-dlp diagnostic' "$TMP/producer.stderr" || fail "yt-dlp diagnost
 pass "streams binary stdout through FIFO and cleans up"
 
 # Playlist URL must be rejected before yt-dlp runs.
-if "$PRODUCER" 'https://www.youtube.com/watch?v=x&list=PL123' "$TMP/playlist.fifo" 2>"$TMP/playlist.stderr"; then
+if bash "$PRODUCER" 'https://www.youtube.com/watch?v=x&list=PL123' "$TMP/playlist.fifo" 2>"$TMP/playlist.stderr"; then
   fail "playlist URL was accepted"
 fi
 [[ ! -e "$TMP/playlist.fifo" ]] || fail "playlist rejection created a FIFO"
 pass "rejects playlist URLs"
 
 # Unsupported host must be rejected.
-if "$PRODUCER" 'https://www.youtube.com.evil.example/watch?v=x' "$TMP/evil.fifo" 2>"$TMP/evil.stderr"; then
+if bash "$PRODUCER" 'https://www.youtube.com.evil.example/watch?v=x' "$TMP/evil.fifo" 2>"$TMP/evil.stderr"; then
   fail "lookalike host was accepted"
 fi
 [[ ! -e "$TMP/evil.fifo" ]] || fail "invalid URL created a FIFO"
@@ -80,7 +80,7 @@ pass "rejects lookalike YouTube hosts"
 # Existing regular file must remain untouched.
 EXISTING="$TMP/existing"
 printf 'preserve-me' > "$EXISTING"
-if "$PRODUCER" "$VIDEO_URL" "$EXISTING" 2>"$TMP/existing.stderr"; then
+if bash "$PRODUCER" "$VIDEO_URL" "$EXISTING" 2>"$TMP/existing.stderr"; then
   fail "existing regular file was accepted as FIFO target"
 fi
 [[ "$(cat "$EXISTING")" == 'preserve-me' ]] || fail "existing file was modified"
@@ -91,7 +91,7 @@ TARGET="$TMP/target"
 LINK="$TMP/link.fifo"
 : > "$TARGET"
 ln -s "$TARGET" "$LINK"
-if "$PRODUCER" "$VIDEO_URL" "$LINK" 2>"$TMP/link.stderr"; then
+if bash "$PRODUCER" "$VIDEO_URL" "$LINK" 2>"$TMP/link.stderr"; then
   fail "symlink target was accepted"
 fi
 [[ -L "$LINK" && -f "$TARGET" ]] || fail "symlink or its target was modified"
@@ -100,7 +100,7 @@ pass "refuses symlink targets"
 # yt-dlp failure must propagate and the producer-owned FIFO must be removed.
 export MOCK_YTDLP_MODE=fail
 FAIL_FIFO="$TMP/failure.fifo"
-"$PRODUCER" "$VIDEO_URL" "$FAIL_FIFO" 2>"$TMP/failure.stderr" &
+bash "$PRODUCER" "$VIDEO_URL" "$FAIL_FIFO" 2>"$TMP/failure.stderr" &
 producer_pid=$!
 for _ in {1..100}; do
   [[ -p "$FAIL_FIFO" ]] && break
