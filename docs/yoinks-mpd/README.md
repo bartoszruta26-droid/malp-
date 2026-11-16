@@ -142,3 +142,7 @@ The script blocks until a reader opens the FIFO. That is expected for a FIFO, bu
 ## Language/tooling restriction
 
 Implementation glue and Pi-side services in this approach must use **Bash or C++ only**. Do not add Python scripts, Python services, Python build steps or Python runtime dependencies. Existing Android Java code is part of the pre-existing MALP application; this restriction concerns the new Raspberry Pi integration approach.
+
+## Raspberry Pi installation
+
+Follow [INSTALL_RASPBERRY_PI.md](INSTALL_RASPBERRY_PI.md) to install the standalone yt-dlp binary and the Bash producer prerequisites. The installer deliberately leaves MPD configuration and its current queue untouched. This prepares the producer environment only; it does not establish that the installed MPD build accepts FIFO input.
