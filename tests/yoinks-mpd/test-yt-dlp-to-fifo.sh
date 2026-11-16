@@ -14,7 +14,7 @@ export MOCK_YTDLP_MODE=success
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 pass() { printf 'PASS: %s\n' "$*"; }
 
-[[ -f bash "$PRODUCER" ]] || fail "producer is missing"
+[[ -f "$PRODUCER" ]] || fail "producer is missing"
 command -v bash >/dev/null
 command -v cmp >/dev/null
 command -v mkfifo >/dev/null
