@@ -196,4 +196,22 @@
             android:title="@string/artwork_settings"
             app:iconSpaceReserved="false" />
     </PreferenceCategory>
+    <PreferenceCategory
+        android:title="@string/preference_youtube_bridge_title"
+        app:iconSpaceReserved="false">
+        <EditTextPreference
+            android:dialogTitle="@string/preference_youtube_bridge_url_title"
+            android:key="@string/pref_youtube_bridge_url_key"
+            android:title="@string/preference_youtube_bridge_url_title"
+            android:summary="@string/preference_youtube_bridge_url_summary"
+            android:inputType="textUri"
+            app:iconSpaceReserved="false" />
+        <EditTextPreference
+            android:dialogTitle="@string/preference_youtube_bridge_token_title"
+            android:key="@string/pref_youtube_bridge_token_key"
+            android:title="@string/preference_youtube_bridge_token_title"
+            android:summary="@string/preference_youtube_bridge_token_summary"
+            android:inputType="textPassword"
+            app:iconSpaceReserved="false" />
+    </PreferenceCategory>
 </PreferenceScreen>
