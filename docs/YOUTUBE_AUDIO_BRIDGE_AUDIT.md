@@ -1,103 +1,68 @@
-# YouTube Audio Bridge – MALP integration specification
+# YouTube audio / Yoinks-MPD integration audit
 
-Status: implementation baseline / design record  
-Base branch: master  
-Feature branch: feature/youtube-audio-bridge
+Status: **design documentation and single-video Bash FIFO producer prototype committed; MPD playback path not yet proven**.
+
+Branch: `feature/youtube-audio-bridge`  
+Repository: https://github.com/bartoszruta26-droid/malp-
 
 ## User requirements
-- Raspberry Pi already runs MPD; MALP already controls that MPD instance.
-- Android Share from YouTube must pass video or playlist URLs into MALP.
-- MALP must submit these URLs to a service running on the Raspberry Pi.
-- Playback must be streamed; do not download or persist audio files.
-- YouTube playlists must be expanded into queue entries.
-- Prefer the best source audio format exposed by YouTube/yt-dlp. Do not transcode lossy audio to FLAC and describe it as lossless. Only select a true FLAC source if the provider actually exposes one; otherwise use the best original audio stream supported by MPD.
-- Preserve existing MPD profiles, connection lifecycle, queue controls, notifications and playback behavior.
 
-## Repository audit (2026-11-16)
-- Repository: https://github.com/bartoszruta26-droid/malp-
-- Default branch: master
-- Baseline commit: fd72e3e41ef2f60af24d53beb0f0b6db7a34d4e2
-- App version: 1.3.2, versionCode 42
-- Android implementation: Java, Gradle 8.7 / AGP 8.5.0, minSdk 21, targetSdk 34.
-- AndroidManifest declares ACTION_SEND with text/plain for MainActivity.
-- MainActivity currently handles ACTION_SEND in onCreate only when extras are present and savedInstanceState is null. It reads EXTRA_TEXT, treats any parseable URL as a media URL, registers ServerConnectionListener and calls MPDQueryHandler.playSongNext(mediaUrl) after MPD connection. This generic behavior must be narrowed: YouTube URLs must go to the bridge, while existing generic URL sharing behavior should remain intentional and tested.
-- MainActivity has no inspected onNewIntent handler. Must support both cold and warm activity starts, avoid duplicate submissions on recreation, extract ClipData/text safely, parse text containing URL/title, validate HTTPS host allowlist and URI syntax.
-- MPDQueryHandler.playSongNext(String) and MPDInterface.addSong(String) already support enqueueing external URI; keep MPD protocol layer unchanged.
-- Existing per-profile streamingURL is for MPD audio output, not the YouTube bridge. Do not overload this field.
-- MPDServerProfile currently stores profile fields in parcel and SQLite. Avoid adding bridge configuration into the profile until schema migration and profile editor are fully implemented. Prefer dedicated app preferences initially: bridge base URL and bearer token, with host/IP and port configurable in settings. A later profile-scoped design can be implemented as a separately reviewed migration.
-- MainActivity currently registers MPD connection listener during pre-super onCreate handling; refactor carefully to process intent after UI/activity setup and coordinate connection state. Use current active MPD connection; if disconnected, preserve pending share and submit only after reconnection.
-- Database profile schema currently version 5. Do not change it for the first integration phase.
+- Raspberry Pi already runs MPD and MALP already controls it.
+- Android YouTube Share should pass video or playlist URLs to the Pi.
+- Use yt-dlp, Yoinks workflow/integration module and MPD.
+- Stream bytes as they are fetched; do not save complete audio files or media temporary files.
+- The selected direction is direct stdout-to-FIFO producer, subject to MPD input compatibility proof.
+- New Raspberry Pi-side implementation and glue must use Bash or C++ only. Do not use Python.
+- Preserve existing MPD and MALP functionality.
+- Prefer the best available source audio format supported by MPD. Do not transcode lossy audio to FLAC and describe it as lossless.
 
-## Intended architecture
-Android MALP -> HTTPS/HTTP local REST bridge -> yt-dlp metadata/format resolver + streaming proxy -> MPD queue.
-The Raspberry Pi bridge must not save audio or cache complete media. Use bounded in-memory metadata/session state only, and stream bytes on demand to MPD via a stable local HTTP URL. Do not give MPD a short-lived YouTube CDN URL.
+## Repository baseline
 
-## Proposed REST API (versioned)
-- POST /api/v1/resolve
-  Request: { "url": "https://www.youtube.com/watch?v=...", "mode": "enqueue"|"play_now" }
-  Response: { "items": [{ "id": "...", "title": "...", "artist": "...", "duration": 123, "stream_url": "http://bridge-host:PORT/api/v1/stream/<opaque-id>" }] }
-- POST /api/v1/resolve-playlist
-  Request: { "url": "https://www.youtube.com/playlist?list=...", "mode": "enqueue"|"play_now" }
-  Response: playlist metadata and ordered items, each having stable local stream_url.
-- GET /api/v1/stream/{opaque-id}
-  Proxies selected upstream audio format on demand; no full-file download, no disk persistence.
-- GET /api/v1/health
-  Returns bridge readiness and yt-dlp version.
-- POST /api/v1/session/{id}/refresh
-  Optional refresh of expiring upstream URL before stream starts.
+- Repository: `bartoszruta26-droid/malp-`
+- Base branch: `master`
+- Baseline commit recorded earlier: `fd72e3e41ef2f60af24d53beb0f0b6db7a34d4e2`
+- Feature branch: `feature/youtube-audio-bridge`
+- Android application is Java/Gradle; the Bash/C++ restriction applies to the new Pi-side integration, not to rewriting the existing Android app.
 
-The endpoint names can be consolidated to a single resolve endpoint if implementation simplicity warrants it. Keep API versioned and typed.
+## Confirmed MPD design constraint
 
-## Stream handling requirements
-- Select best source audio format using yt-dlp format metadata, prefer codecs/bitrates based on real source formats. Preserve original codec whenever MPD supports it. FLAC is only a preference when source actually exists as FLAC; no lossy-to-FLAC transcode.
-- The local stream endpoint must return correct Content-Type, status codes, support Range if feasible and forward required upstream headers/cookies only where legitimate.
-- Stream source URL should be resolved shortly before playback, not playlist enqueue, to avoid expiring links.
-- For playlists, enumerate metadata and enqueue local stable URLs; resolve each individual upstream source lazily when MPD requests it.
-- Must avoid writing media to disk, including temporary files. Disable yt-dlp download mode; use metadata extraction and stream proxy / stdout piping.
-- Apply concurrency limits, request timeouts, maximum playlist size, bounded memory, no shell interpolation, subprocess argument arrays, URL/host validation, loopback/LAN-only default bind, bearer token authentication, rate limits and SSRF protection.
-- Explicitly distinguish login-required/private/region-restricted/deleted videos and unavailable entries in playlist.
-- Expose clear error codes to MALP.
+MPD's documented `pipe` plugin is an **output** plugin: it starts a command and writes decoded PCM to the command's standard input. MPD's `fifo` output plugin also sends PCM out of MPD. Neither is an input pipe for feeding yt-dlp bytes into MPD.
 
-## MALP behavior
-- ACTION_SEND text/plain from YouTube: identify YouTube URL; present lightweight choice "Add to queue" / "Play now" (default add to queue), or support user-configured default.
-- Playlist share: present count/title and enqueue all valid items in original order.
-- Queue behavior: enqueue uses MPDQueryHandler.playSongNext? No: that existing method means play next after current item, not necessarily append. Confirm exact behavior. Use an MPD command path that genuinely appends playlist items to tail in order (existing MPDInterface.addSong / MPDQueryHandler action ACTION_ADD_PATH). Play now should clear queue only after successful resolution, add URLs in order, then play index 0; design as a single serialized operation.
-- Preserve queue and current playback on failed resolve: do not clear queue or replace current song until the bridge returns a complete validated item list.
-- Add UI feedback for resolving, queued count, unavailable entries, bridge offline, authentication failure and stream errors.
-- Use active profile MPD hostname and configured bridge host when default bridge host is unset; allow explicit bridge URL for different host topology.
-- Never put MPD password into bridge requests. Bridge auth token is separate and stored in Android private preferences.
-- Support ACTION_SEND and ACTION_SEND_MULTIPLE if practical; handle ClipData and onNewIntent.
-- Avoid duplicate processing across activity recreation; persist pending request only as needed, clear once accepted or cancelled.
+The documented MPD input plugin reference does not describe a general-purpose stdin/FIFO input plugin. A local FIFO may or may not work through the local-file input path for a particular MPD build; this must be tested on the actual Raspberry Pi. Do not assume `mpc add /path/to/fifo` is supported.
 
-## Test plan
-Android unit/instrumented:
-1. URL parsing from plain URL, title + URL, trailing punctuation, youtu.be, youtube.com/watch, youtube.com/playlist, music.youtube.com, shorts.
-2. Reject lookalike hosts (youtube.com.evil.test), non-HTTPS YouTube, file://, localhost and arbitrary private URLs.
-3. Cold start ACTION_SEND and warm onNewIntent.
-4. No active MPD profile / disconnected MPD / bridge timeout / 401 / 413 / 429 / 5xx / malformed response.
-5. Verify enqueue does not clear current queue and preserves order.
-6. Play-now clears only after successful resolution.
-7. Playlist partial failures preserve available entries and report skipped count.
+Official reference: https://mpd.readthedocs.io/en/stable/plugins.html
 
-Bridge tests:
-1. Single-video metadata resolution and stream.
-2. Playlist enumeration; preserve order and bounded max entries.
-3. Validate no files are written to disk.
-4. Validate stable local stream URL still works after resolver URL refresh.
-5. HTTP Range and correct MIME where supported.
-6. Upstream 403/410/429, deleted/private/unavailable, region/age/login restricted.
-7. Concurrent playlist streams, timeout, cancellation and resource limits.
-8. SSRF and authentication tests.
-9. Verify no lossy-to-FLAC conversion is claimed or performed.
+If the installed MPD cannot read a FIFO as a local source, the direct FIFO architecture is blocked without a native C++ MPD input plugin or a separately approved local HTTP input fallback. Do not silently switch to HTTP.
 
-## Work sequence
-1. Audit and record baseline. DONE.
-2. Create feature branch. DONE.
-3. Implement bridge service and deployment artifacts with tests.
-4. Add MALP preferences for bridge address/token.
-5. Add robust share-intent routing and queue operations.
-6. Add tests and CI build; run Android emulator tests if runner permits.
-7. Review diff, update CHANGELOG and merge only after green tests.
+## Added repository files
 
-## Current limitations
-The GitHub connector can inspect and modify repository files but does not provide an Android SDK/emulator runtime. Build and emulator verification must be done through repository CI or a local Android build environment. Do not claim APK compilation or playback testing unless actual workflow results are observed.
+- `docs/yoinks-mpd/README.md` — architecture, MPD input limitation, audio policy, playlist design, security, verification plan and implementation phases.
+- `scripts/yoinks-mpd/yt-dlp-to-fifo.sh` — experimental single-video producer. It sends yt-dlp stdout to a newly created FIFO, rejects playlist URLs, refuses existing paths/symlinks and removes only the FIFO it created.
+- Root `README.md` — links to the new design and script and explicitly marks the approach experimental.
+
+## Prototype limitations
+
+The script is a producer-side proof-of-concept, not a complete Yoinks-MPD daemon:
+- It supports one video only; playlist enumeration and per-track FIFO lifecycle are not implemented.
+- It does not add items to MPD's queue.
+- It does not establish that MPD can open/decode the FIFO.
+- It does not implement the Pi-side authenticated request service.
+- It does not claim end-to-end playback or Raspberry Pi hardware verification.
+- It uses Bash and yt-dlp only; no Python code or runtime is introduced.
+
+The original Yoinks TUI must not be assumed to provide non-interactive stdout streaming or playlist-to-MPD control. Yoinks-MPD is the integration module to be implemented around the yt-dlp engine.
+
+## Required next work
+
+1. Run `bash -n scripts/yoinks-mpd/yt-dlp-to-fifo.sh` in a Bash environment.
+2. Test producer bytes with a separate FIFO reader, verify stderr/stdout separation, error propagation, SIGINT/SIGTERM cleanup and no media files on disk.
+3. On the Raspberry Pi, record MPD version/build and test whether the local-file input can consume a FIFO and decode the selected source codec.
+4. If FIFO input works, implement a Bash/C++ process supervisor and MPD queue integration. If it does not, stop and request approval for a native C++ input plugin or HTTP fallback.
+5. Implement playlist expansion as separate ordered items, never as concatenated playlist stdout.
+6. Connect MALP Share intents only after the Pi-side contract is stable.
+7. Add automated tests and verify the existing MALP functions remain intact.
+8. Merge to `master` only after successful CI and Raspberry Pi playback/regression tests.
+
+## Test status
+
+No Bash syntax test, FIFO consumer test, MPD playback test, Raspberry Pi test, Android build or emulator test is claimed by this audit. These require execution in a suitable environment. The GitHub file commits only establish that the source files were written to the feature branch.
