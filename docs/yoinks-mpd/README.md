@@ -146,3 +146,16 @@ Implementation glue and Pi-side services in this approach must use **Bash or C++
 ## Raspberry Pi installation
 
 Follow [INSTALL_RASPBERRY_PI.md](INSTALL_RASPBERRY_PI.md) to install the standalone yt-dlp binary and the Bash producer prerequisites. The installer deliberately leaves MPD configuration and its current queue untouched. This prepares the producer environment only; it does not establish that the installed MPD build accepts FIFO input.
+
+
+## Offline regression test suite
+
+Run the producer regression suite without contacting YouTube or changing MPD playback:
+
+```bash
+bash -n scripts/yoinks-mpd/yt-dlp-to-fifo.sh
+bash -n tests/yoinks-mpd/test-yt-dlp-to-fifo.sh
+bash tests/yoinks-mpd/test-yt-dlp-to-fifo.sh
+```
+
+The test uses a mock `yt-dlp` executable and a separate FIFO reader. It checks binary byte integrity, stderr diagnostics, playlist and lookalike-host rejection, refusal to overwrite files or follow symlinks, non-zero error propagation, and cleanup of the FIFO created by the producer. It does not test MPD input compatibility or real YouTube extraction. The test is intentionally invoked through `bash`; executable file mode is not required.
