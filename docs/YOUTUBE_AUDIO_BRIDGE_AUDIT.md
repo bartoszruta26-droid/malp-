@@ -1,6 +1,8 @@
 # YouTube audio / Yoinks-MPD integration audit
 
-Status: **design documentation and single-video Bash FIFO producer prototype committed; MPD playback path not yet proven**.
+Status: **C++ local HTTP proxy implementation present; latest target-device build and all 11 CTest cases passed on Raspberry Pi; live YouTube/CDN and audible hardware playback remain unverified.**
+
+> Current-state notice: this audit contains chronological historical sections. The later dated addenda supersede earlier prototype status, architecture, and test statements where they conflict. The accepted transport is the local C++ HTTP proxy, not a FIFO.
 
 Branch: `feature/youtube-audio-bridge`  
 Repository: https://github.com/bartoszruta26-droid/malp-
@@ -11,7 +13,7 @@ Repository: https://github.com/bartoszruta26-droid/malp-
 - Android YouTube Share should pass video or playlist URLs to the Pi.
 - Use yt-dlp, Yoinks workflow/integration module and MPD.
 - Stream bytes as they are fetched; do not save complete audio files or media temporary files.
-- The selected direction is direct stdout-to-FIFO producer, subject to MPD input compatibility proof.
+- The accepted media transport is a local C++ HTTP proxy consumed through MPD's CURL input plugin; FIFO transport is historical and superseded.
 - New Raspberry Pi-side implementation and glue must use Bash or C++ only. Do not use Python.
 - Preserve existing MPD and MALP functionality.
 - Prefer the best available source audio format supported by MPD. Do not transcode lossy audio to FLAC and describe it as lossless.
