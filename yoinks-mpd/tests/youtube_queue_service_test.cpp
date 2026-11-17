@@ -46,6 +46,21 @@ void testSuccessfulQueueIsLazyAndOrdered() {
             "MPD must receive only local proxy URIs");
 }
 
+void testPlayNowIsReportedOnlyAfterQueueConfirmation() {
+    auto sessions = std::make_shared<yoinks::LazyStreamSessionRegistry>();
+    yoinks::YoutubeQueueService service({8788, 200, sessions,
+        [](const std::string&) { return metadata(1); },
+        [](const std::vector<std::string>&, bool play_now) {
+            yoinks::MpdQueueResult result;
+            result.success = play_now;
+            result.queued = play_now ? 1 : 0;
+            return result;
+        }});
+    const auto result = service.enqueue("https://youtu.be/abcdefghijk", true);
+    require(result.success && result.started && result.queued == 1,
+            "play-now must be reported only after MPD confirms the operation");
+}
+
 void testKnownRollbackRemovesCapabilities() {
     auto sessions = std::make_shared<yoinks::LazyStreamSessionRegistry>();
     yoinks::YoutubeQueueService service({8788, 200, sessions,
@@ -92,6 +107,7 @@ void testPlaylistLimitAndMetadataFailure() {
 
 int main() {
     testSuccessfulQueueIsLazyAndOrdered();
+    testPlayNowIsReportedOnlyAfterQueueConfirmation();
     testKnownRollbackRemovesCapabilities();
     testUnknownOutcomeRetainsCapabilities();
     testPlaylistLimitAndMetadataFailure();
