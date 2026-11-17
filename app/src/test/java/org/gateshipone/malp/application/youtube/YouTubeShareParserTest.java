@@ -78,7 +78,7 @@ public class YouTubeShareParserTest {
     }
 
     @Test public void extractsLinksFromMultipleTextPayloadsAndDeduplicates() {
-        List<String> urls = YouTubeShareParser.extractYouTubeUrls(
+        List<String> urls = YouTubeShareParser.extractYouTubeUrlsFromPayloads(
                 java.util.Arrays.asList(
                         "https://youtu.be/dQw4w9WgXcQ",
                         "shared text without a link",
@@ -100,7 +100,7 @@ public class YouTubeShareParserTest {
     }
 
     @Test public void nullMultipleSharePayloadReturnsNoUrls() {
-        assertTrue(YouTubeShareParser.extractYouTubeUrls((Iterable<?>) null).isEmpty());
+        assertTrue(YouTubeShareParser.extractYouTubeUrlsFromPayloads((Iterable<?>) null).isEmpty());
     }
 
     @Test public void ignoresInvalidLinksAmongValidSharedLinks() {
@@ -111,7 +111,7 @@ public class YouTubeShareParserTest {
     }
 
     @Test public void emptyAndNullShareTextReturnNoUrls() {
-        assertTrue(YouTubeShareParser.extractYouTubeUrls(null).isEmpty());
+        assertTrue(YouTubeShareParser.extractYouTubeUrls((String) null).isEmpty());
         assertTrue(YouTubeShareParser.extractYouTubeUrls("").isEmpty());
     }
 
