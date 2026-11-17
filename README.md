@@ -41,11 +41,10 @@ This fork contains an experimental design area for receiving YouTube shares in M
 
 - Architecture, security and implementation plan: [professional audit](work/youtube-audio-bridge/AUDYT_ARCHITEKTURY_I_PLAN_REALIZACJI.md)
 - Current stage tracker: [YouTube audio bridge workspace](work/youtube-audio-bridge/README.md)
-- Pi-side FIFO producer prototype (not the target MPD transport): [yt-dlp-to-fifo.sh](scripts/yoinks-mpd/yt-dlp-to-fifo.sh)
 - Pi HTTP-input diagnostic: [diagnose-mpd-http.sh](scripts/yoinks-mpd/diagnose-mpd-http.sh)
 - Diagnostic procedure: [MPD HTTP input verification](docs/yoinks-mpd/MPD_HTTP_INPUT_DIAGNOSTIC.md)
 
-**Status:** no end-to-end playback is claimed. The FIFO script only proves the producer side; MPD's documented FIFO/pipe plugins are output plugins and are not a generic audio input. The exact MPD build on the target Raspberry Pi must pass the CURL-input compatibility gate before the relay is implemented. The diagnostic script collects version/build evidence but does not itself prove playback.
+**Status:** HTTP proxy is the only target transport. No end-to-end playback is claimed because the C++ proxy service is not yet implemented. The exact MPD build on the target Raspberry Pi must pass the CURL-input compatibility gate before integration. The diagnostic script collects version/build evidence but does not itself prove playback.
 
 The Raspberry Pi implementation is restricted to Bash/C++; Android remains Java. RAM-only is a hard requirement, including disabling disk-backed swap or proving that bridge pages cannot spill to persistent storage. No merge to the default branch before hardware playback, queue, RAM-only and regression gates pass.
 
