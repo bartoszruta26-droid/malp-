@@ -562,9 +562,9 @@ void testConcurrentLifecycleStressMaintainsRegistryAccounting() {
     std::thread activator([&] {
         for (unsigned round = 0; round < 80; ++round) {
             for (const auto& id : ids) {
+                activation_attempts.fetch_add(1);
                 registry.activate(id,
-                    [&](const std::string&, std::string&, const std::atomic_bool*) {
-                        activation_attempts.fetch_add(1);
+                    [](const std::string&, std::string&, const std::atomic_bool*) {
                         return false;
                     });
             }
@@ -603,7 +603,7 @@ void testConcurrentLifecycleStressMaintainsRegistryAccounting() {
 
     const bool all_sessions_retained = registry.size() == ids.size();
     const bool no_active_reservations = registry.activeCount() == 0;
-    const bool all_workers_exercised = activation_attempts.load() > 0
+    const bool all_workers_exercised = activation_attempts.load() == 16U * 80U
             && release_attempts.load() == 16U * 80U
             && reconciliation_attempts.load() == 160U
             && observation_attempts.load() == 500U;
