@@ -7,6 +7,9 @@
 #include <cstdlib>
 #include <exception>
 #include <iostream>
+#include <limits>
+#include <stdexcept>
+#include <utility>
 #include <string>
 
 namespace {
@@ -16,14 +19,24 @@ std::string environment(const char* name, const std::string& fallback) {
     return value == nullptr ? fallback : value;
 }
 
+std::uint16_t portFromEnvironment() {
+    const std::string value = environment("YOINKS_MPD_PORT", "8788");
+    std::size_t consumed = 0;
+    const unsigned long parsed = std::stoul(value, &consumed);
+    if (consumed != value.size() || parsed == 0
+            || parsed > std::numeric_limits<std::uint16_t>::max()) {
+        throw std::invalid_argument("YOINKS_MPD_PORT must be an integer from 1 to 65535");
+    }
+    return static_cast<std::uint16_t>(parsed);
+}
+
 }  // namespace
 
 int main() {
     try {
         yoinks::HttpServerConfig config;
         config.bind_address = environment("YOINKS_MPD_BIND", "127.0.0.1");
-        config.port = static_cast<std::uint16_t>(
-                std::stoul(environment("YOINKS_MPD_PORT", "8788")));
+        config.port = portFromEnvironment();
         config.bearer_token = environment("YOINKS_MPD_TOKEN", "");
         yoinks::HttpServer server{std::move(config)};
         server.run();
