@@ -200,8 +200,12 @@ MpdQueueResult MpdQueueManager::enqueue(const std::vector<std::string>& stream_u
             }
             result.error_code = reply.rejected ? "mpd_play_now_rejected"
                     : "mpd_play_now_outcome_unknown";
-            result.queued = 0;
-            result.song_ids.clear();
+            if (result.rollback_complete) {
+                result.queued = 0;
+                result.song_ids.clear();
+            } else {
+                result.queued = result.song_ids.size();
+            }
             return result;
         }
     }
