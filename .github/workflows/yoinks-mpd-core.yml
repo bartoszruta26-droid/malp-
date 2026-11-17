@@ -28,6 +28,7 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - name: Install build dependencies
@@ -50,7 +51,7 @@ jobs:
       - name: Build
         run: cmake --build yoinks-mpd/build --parallel 2
       - name: Test
-        run: ctest --test-dir yoinks-mpd/build --output-on-failure
+        run: ctest --test-dir yoinks-mpd/build --timeout 120 --output-on-failure
       - name: Configure sanitizer build
         run: |
           cmake -S yoinks-mpd -B yoinks-mpd/build-sanitizers \
@@ -59,4 +60,4 @@ jobs:
       - name: Build with AddressSanitizer and UndefinedBehaviorSanitizer
         run: cmake --build yoinks-mpd/build-sanitizers --parallel 2
       - name: Test with AddressSanitizer and UndefinedBehaviorSanitizer
-        run: ctest --test-dir yoinks-mpd/build-sanitizers --output-on-failure
+        run: ctest --test-dir yoinks-mpd/build-sanitizers --timeout 120 --output-on-failure
