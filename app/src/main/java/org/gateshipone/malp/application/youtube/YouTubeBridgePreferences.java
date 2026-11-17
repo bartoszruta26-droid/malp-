@@ -78,7 +78,7 @@ public final class YouTubeBridgePreferences {
 
     public static boolean isConfigured(Context context) {
         String url = getBaseUrl(context);
-        return url != null && (url.startsWith("http://") || url.startsWith("https://"))
+        return url != null && url.startsWith("https://")
                 && !getToken(context).isEmpty();
     }
 
