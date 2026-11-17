@@ -71,3 +71,8 @@ Added `StreamSessionRegistry` with a default maximum of four sessions (hard cap 
 ## Deterministic chunked-transfer tests
 
 The HTTP endpoint and its unit-tested `writeChunkedStream` helper share the same chunk-framing implementation. Tests cover progressive output in bounded 16 KiB blocks, successful terminal-chunk emission, omission of the terminal chunk after upstream failure, and immediate stop after a socket-write failure. These tests validate framing and producer/consumer control flow without creating a production session-injection endpoint. They do not replace a live MPD/CURL playback test.
+
+
+## Server shutdown
+
+The listener uses asynchronous accept and handles SIGINT/SIGTERM through Boost.Asio. Shutdown closes the listener, drains control workers so no additional stream tasks can be submitted, cancels all registered upstream sessions to wake blocked RAM-buffer readers, and then joins the dedicated stream workers. The HTTP integration test exercises SIGTERM shutdown. This lifecycle path still requires successful CI and device-level verification.
