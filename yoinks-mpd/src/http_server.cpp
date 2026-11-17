@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cctype>
 #include <memory>
 #include <stdexcept>
@@ -117,19 +118,22 @@ http::response<http::string_body> handle(
 }
 
 void serveConnection(tcp::socket socket, const std::string& token) {
+    beast::tcp_stream stream{std::move(socket)};
+    stream.expires_after(std::chrono::seconds(10));
     beast::error_code error;
     beast::flat_buffer buffer;
     http::request_parser<http::string_body> parser;
     parser.body_limit(kMaxBodyBytes);
     parser.header_limit(kMaxHeaderBytes);
 
-    http::read(socket, buffer, parser, error);
+    http::read(stream, buffer, parser, error);
     if (error) {
         if (error == http::error::body_limit) {
             auto reply = response(http::status::payload_too_large,
                     R"({"success":false,"error":{"code":"request_too_large","message":"Request body too large"}})",
                     11);
-            http::write(socket, reply, error);
+            stream.expires_after(std::chrono::seconds(5));
+            http::write(stream, reply, error);
         }
         socket.shutdown(tcp::socket::shutdown_both, error);
         socket.close(error);
@@ -138,9 +142,10 @@ void serveConnection(tcp::socket socket, const std::string& token) {
 
     auto request = parser.release();
     auto reply = handle(request, token);
-    http::write(socket, reply, error);
-    socket.shutdown(tcp::socket::shutdown_both, error);
-    socket.close(error);
+    stream.expires_after(std::chrono::seconds(5));
+    http::write(stream, reply, error);
+    stream.socket().shutdown(tcp::socket::shutdown_both, error);
+    stream.socket().close(error);
 }
 
 }  // namespace
