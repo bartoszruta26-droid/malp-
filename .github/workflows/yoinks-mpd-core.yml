@@ -4,10 +4,12 @@ on:
   push:
     paths:
       - "yoinks-mpd/**"
+      - "scripts/yoinks-mpd/install.sh"
       - ".github/workflows/yoinks-mpd-core.yml"
   pull_request:
     paths:
       - "yoinks-mpd/**"
+      - "scripts/yoinks-mpd/install.sh"
       - ".github/workflows/yoinks-mpd-core.yml"
   workflow_dispatch:
 
@@ -20,6 +22,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake g++ libboost-dev nlohmann-json3-dev libcurl4-openssl-dev
+      - name: Verify installer shell syntax
+        run: bash -n scripts/yoinks-mpd/install.sh
       - name: Configure
         run: cmake -S yoinks-mpd -B yoinks-mpd/build -DCMAKE_BUILD_TYPE=Release
       - name: Build
