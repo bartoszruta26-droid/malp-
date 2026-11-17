@@ -5,6 +5,8 @@
 #include <boost/asio.hpp>
 
 #include <cstdlib>
+#include <cstdint>
+#include <exception>
 #include <fstream>
 #include <iostream>
 #include <string>
