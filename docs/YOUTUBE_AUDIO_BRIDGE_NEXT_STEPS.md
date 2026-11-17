@@ -486,3 +486,6 @@ No production binary installation or service restart without explicit user appro
 3. Test multiple DNS answers where one is public and one is forbidden; reject unsafe answer sets or constrain connection attempts to validated addresses only.
 4. Add deterministic tests for DNS rebinding, IPv4/IPv6 edge cases, malformed resolver responses, and test-only loopback fixture behavior.
 5. Only then implement the smallest safe change and run normal plus ASan/UBSan suites. Keep redirects disabled.
+
+
+- Latest diagnostic follow-up `7695163c` adds per-phase stderr markers to the shutdown-versus-mutation test. Inspect the next sanitizer log to identify the exact case and phase before changing registry synchronization. Do not infer the root cause from the test name alone.
