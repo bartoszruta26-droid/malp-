@@ -342,6 +342,89 @@ void testClearDuringStartedButUnpublishedStreamDoesNotRecreateSession() {
             "the cancelled unpublished activation must finish without recreating a cleared session");
 }
 
+void testShutdownWaitsForUnpublishedActivationBeforeDestruction() {
+    std::mutex mutex;
+    std::condition_variable condition;
+    bool after_start_entered = false;
+    bool allow_activation_to_finish = false;
+
+    yoinks::LazyStreamSessionRegistryConfig config;
+    config.upstream.connect_timeout_seconds = 1;
+    config.upstream.test_connect_to_for_tests =
+            "rr1.googlevideo.com:443:127.0.0.1:1";
+    config.after_upstream_start_for_tests = [&] {
+        std::unique_lock<std::mutex> lock(mutex);
+        after_start_entered = true;
+        condition.notify_all();
+        condition.wait(lock, [&] { return allow_activation_to_finish; });
+    };
+
+    // Keep the registry alive until shutdown() has returned and both threads
+    // have joined. Concurrent destruction through a raw object reference is
+    // not a valid C++ lifetime contract; shutdown() is the explicit barrier.
+    yoinks::LazyStreamSessionRegistry registry(config);
+    const auto id = registry.create("qqAYW7uxErI");
+    bool activated = true;
+    std::atomic<bool> shutdown_returned{false};
+
+    std::thread activation_worker([&] {
+        activated = registry.activate(id,
+            [](const std::string&, std::string& url, const std::atomic_bool*) {
+                url = "https://rr1.googlevideo.com/audio.bin";
+                return true;
+            });
+    });
+
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        condition.wait(lock, [&] { return after_start_entered; });
+    }
+
+    std::thread shutdown_worker([&] {
+        registry.shutdown();
+        shutdown_returned.store(true);
+    });
+
+    bool rejected_new_session = false;
+    for (unsigned attempt = 0; attempt < 100000 && !rejected_new_session; ++attempt) {
+        const auto probe = registry.create("dQw4w9WgXcQ");
+        if (probe.empty()) {
+            rejected_new_session = true;
+        } else {
+            registry.erase(probe);
+            std::this_thread::yield();
+        }
+    }
+    const bool shutdown_waited_for_activation = !shutdown_returned.load();
+
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        allow_activation_to_finish = true;
+    }
+    condition.notify_all();
+
+    activation_worker.join();
+    shutdown_worker.join();
+
+    const bool empty_after_shutdown = registry.size() == 0
+            && registry.activeCount() == 0;
+    const bool rejects_operations_after_shutdown =
+            registry.create("dQw4w9WgXcQ").empty()
+            && !registry.activate(id,
+                [](const std::string&, std::string&, const std::atomic_bool*) {
+                    return false;
+                });
+
+    require(rejected_new_session,
+            "shutdown must reject new session creation once shutdown begins");
+    require(shutdown_waited_for_activation,
+            "shutdown must wait while an activation owns an unpublished upstream");
+    require(!activated && shutdown_returned.load(),
+            "cancelled activation must finish before shutdown returns");
+    require(empty_after_shutdown && rejects_operations_after_shutdown,
+            "shutdown must leave no sessions or active slots and reject later work");
+}
+
 void testRetainOnlyPreservesUnpublishedActivationAndSlotAccounting() {
     std::mutex mutex;
     std::condition_variable condition;
@@ -524,6 +607,7 @@ int main() {
         testReleaseDuringStartedButUnpublishedStreamFreesReservation();
         testEraseDuringStartedButUnpublishedStreamDoesNotRecreateSession();
         testClearDuringStartedButUnpublishedStreamDoesNotRecreateSession();
+        testShutdownWaitsForUnpublishedActivationBeforeDestruction();
         testRetainOnlyPreservesUnpublishedActivationAndSlotAccounting();
         testRetainOnlyPreservesInFlightActivation();
         testReleaseRetainsQueuedCapabilityForReplay();
