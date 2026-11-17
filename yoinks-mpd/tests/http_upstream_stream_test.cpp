@@ -30,10 +30,11 @@ void testRejectsNonHttpsAndUserInfo() {
             "invalid URL must not transfer any bytes");
 }
 
-void testRejectsSecondStart() {
+void testRejectsSecondStartAfterFailure() {
     yoinks::HttpUpstreamStream stream;
+    require(!stream.start("http://example.com/audio"), "invalid URL should fail");
     require(!stream.start("https://example.com/audio"),
-            "URL host without an explicit path is rejected by parser only if malformed");
+            "a stream instance must not be restarted after terminal failure");
 }
 
 }  // namespace
