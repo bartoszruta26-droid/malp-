@@ -1,6 +1,6 @@
 # Instalacja Yoinks-MPD na Raspberry Pi
 
-Status: instalator zależności i producenta; odtwarzanie przez MPD pozostaje niezweryfikowane.
+Status: instalator zależności i prototypu FIFO; odtwarzanie przez MPD pozostaje niezweryfikowane. Docelowa architektura to lokalny HTTP relay + MPD CURL input.
 
 ## Zakres
 
@@ -69,7 +69,7 @@ mpc status
 
 Zachowaj wyniki i przekaż je do dalszego etapu integracji. Na tym etapie nie wykonuj mpc clear, mpc add, mpc play ani zmian w mpd.conf.
 
-## 6. Ważne: test FIFO
+## 6. Ważne: status prototypu FIFO
 
 Obecny skrypt yt-dlp-to-fifo.sh obsługuje pojedynczy film i czeka, aż inny proces otworzy FIFO do odczytu. Nie uruchamiaj go samodzielnie bez czytnika, ponieważ będzie oczekiwał na odbiorcę.
 
@@ -77,14 +77,14 @@ Samo utworzenie FIFO i przesłanie przez nie bajtów nie dowodzi, że MPD może 
 
 ## 7. Bramka przed uruchomieniem odtwarzania
 
-Przed podłączeniem MALP i kolejki MPD trzeba potwierdzić:
-1. czy lokalny input MPD potrafi otworzyć FIFO;
-2. czy dekoder MPD obsługuje kodek wybrany przez yt-dlp;
-3. czy poprawnie działają EOF, stop, skip i anulowanie procesu;
-4. czy producent kończy pracę i usuwa wyłącznie własne FIFO;
-5. czy zwykłe sterowanie MPD przez MALP pozostaje bez zmian.
+FIFO nie jest transportem docelowym. Przed implementacją usługi C++ należy potwierdzić na dokładnym Raspberry Pi:
+1. czy zainstalowany MPD ma wejście CURL;
+2. czy odtwarza znany, krótki strumień HTTP na odizolowanej instancji MPD;
+3. jakie żądania HTTP wykonuje (GET, HEAD, Range) i jak zachowuje się przy EOF, ponownym połączeniu i seek;
+4. czy dekoder obsługuje kodek i kontener wybranego źródła;
+5. czy test nie zmienia produkcyjnej kolejki ani ustawień MPD.
 
-Jeżeli FIFO nie działa jako wejście, nie wdrażamy fikcyjnego mpc add /ścieżka/do/fifo. Dalsze warianty to natywny moduł wejściowy MPD w C++ albo lokalny strumień HTTP obsługiwany przez wtyczkę CURL MPD. Zmiana architektury na HTTP wymaga osobnej decyzji.
+Użyj skryptu `scripts/yoinks-mpd/diagnose-mpd-http.sh` i [procedury diagnostycznej](MPD_HTTP_INPUT_DIAGNOSTIC.md). Skrypt zbiera informacje, ale sam nie dowodzi odtwarzania. Jeżeli CURL input nie jest dostępny, zatrzymaj prace i podejmij osobną decyzję o aktualizacji/rekompilacji MPD albo natywnym module wejściowym C++. Nie zakładaj obsługi FIFO.
 
 ## 8. Bezpieczeństwo
 
