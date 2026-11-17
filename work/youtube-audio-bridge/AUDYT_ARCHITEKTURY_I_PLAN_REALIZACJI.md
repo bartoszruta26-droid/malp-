@@ -754,3 +754,36 @@ Commit `b3e6a442a336e4ca12774c5e5cedd27e9795ae04` uzyskał `build-and-test: succ
 Poprzedni commit `226d3fc...` miał wynik `failure` wyłącznie z powodu asercji w nowym teście rozmiaru pierwszego chunku. Asercję skorygowano w `191845f...`; ten commit uzyskał PASS, a następny przebieg `b3e6a44...` potwierdził także graceful shutdown. Błąd testu nie dotyczył kompilacji serwera.
 
 **Zakres dowodu:** CI potwierdza kompilację i testy na runnerze GitHub x86_64. Nie potwierdza jeszcze działania na Raspberry Pi, obsługi konkretnego MPD/CURL, prawdziwego źródła YouTube ani odtwarzania end-to-end.
+
+## Aktualizacja — komponent resolvera yt-dlp (2026-11-17)
+
+### Implementacja
+
+Dodano `YtDlpResolver` w `yoinks-mpd/include/yoinks/yt_dlp_resolver.hpp` i `yoinks-mpd/src/yt_dlp_resolver.cpp`. Proces uruchamiany jest przez `posix_spawn` z osobnymi argumentami argv i bez powłoki. Konfiguracja wymaga bezwzględnej ścieżki wykonywalnego pliku yt-dlp. Proces otrzymuje `/dev/null` na stdin, oddzielne potoki stdout/stderr, własną grupę procesów oraz ograniczony czas działania.
+
+Tryb metadanych używa `--skip-download`, `--flat-playlist`, `--playlist-end` (limit maksymalny 200), `--dump-single-json`, `--ignore-config` i `--no-cache-dir`. Wynik jest parsowany do listy ID, tytułów i opcjonalnego czasu trwania; kolejność wpisów playlisty zostaje zachowana. Nie przekazuje do modelu/Androida URL-i CDN.
+
+Tryb adresu audio przyjmuje wyłącznie 11-znakowy identyfikator filmu, wywołuje `--get-url` i `--skip-download`, a wynik akceptuje wyłącznie po sprawdzeniu HTTPS i granicy hosta `googlevideo.com`. URL pozostaje w pamięci procesu; stderr nie jest zapisywany ani logowany.
+
+Oba tryby mają limit czasu, limit stdout/stderr, zakończenie całej grupy procesów po timeout/przekroczeniu limitu oraz niesensytywne kody błędów. Wspólną walidację adresu YouTube wyodrębniono do `youtube_url.hpp` i wykorzystuje ją zarówno API HTTP, jak i resolver.
+
+### Testy i dowód CI
+
+Testy resolvera korzystają z tymczasowych wykonywalnych atrap i obejmują parsowanie playlisty, kolejność wpisów, czas trwania, walidację hosta YouTube, allowlistę URL CDN, odrzucanie nieprawidłowego ID, timeout procesu oraz limit stdout. Nie wykonują połączeń z YouTube i nie pobierają mediów.
+
+Commit `3ea3d98c54220d4b71b7ec1caa9649ca6fc1bbb9` uzyskał `build-and-test: success` w GitHub Actions (job `133917734049`, zakończony 2026-11-17 08:34:22 UTC). CTest: **6/6 PASS** (`bounded_stream_buffer`, `http_upstream_validation`, `stream_session_registry`, `chunked_stream_writer`, `yt_dlp_resolver`, `http_api_integration`).
+
+### Ograniczenia
+
+- Resolver jest komponentem bibliotecznym, ale nie został jeszcze wstrzyknięty do `HttpServer` ani podłączony do `POST /api/v1/queue`.
+- Nie ma jeszcze testu integracyjnego z rzeczywistym yt-dlp/YouTube w nowym komponencie; test instalatora nadal sprawdza metadane testowego filmu oddzielnie.
+- Nie ma jeszcze anulowania procesu przez API operacji; na obecnym etapie działa timeout i zabicie grupy procesów.
+- Nie ma MPD queue managera, więc `POST /api/v1/queue` ma nadal zwracać 503.
+- Nie wykonano ponownego builda na Raspberry Pi po dodaniu resolvera; CI jest dowodem z runnera x86_64.
+
+### Następny etap
+
+1. Zintegrować resolver z kontrolowanym przepływem żądania: najpierw metadane, walidacja i limit playlisty, następnie utworzenie sesji upstream dla wybranych ID.
+2. Zaprojektować anulowanie żądania i sesji tak, aby zamknięcie klienta, stop/next i shutdown kończyły proces yt-dlp oraz producenta HTTP.
+3. Dopiero po utworzeniu sesji i queue managera zwracać sukces w `/api/v1/queue`; do tego czasu zachować 503.
+4. W1 nadal pozostaje otwarty: wymagany jest osobny test MPD CURL na Raspberry Pi, bez zmian w produkcyjnej kolejce.
