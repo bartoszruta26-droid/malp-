@@ -154,6 +154,27 @@ void testCancellationTerminatesProcessGroup() {
     require(elapsed < std::chrono::seconds(2),
             "cancellation must not wait for the process timeout");
 }
+void testAudioUrlCancellationTerminatesProcessGroup() {
+    TemporaryExecutable executable("#!/bin/sh\\nsleep 5\\nprintf '%s\\n' 'https://r1---sn.googlevideo.com/videoplayback?expire=123'\\n");
+    yoinks::YtDlpResolverConfig config;
+    config.executable = executable.path();
+    config.timeout_milliseconds = 10000;
+    yoinks::YtDlpResolver resolver(config);
+    std::atomic_bool cancelled{false};
+    std::thread trigger([&cancelled]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        cancelled.store(true, std::memory_order_relaxed);
+    });
+    std::string url;
+    const auto started = std::chrono::steady_clock::now();
+    const bool resolved = resolver.resolveAudioUrl("qqAYW7uxErI", url, &cancelled);
+    trigger.join();
+    const auto elapsed = std::chrono::steady_clock::now() - started;
+    require(!resolved, "cancelled audio URL resolution must fail");
+    require(url.empty(), "cancelled audio URL resolution must not expose a partial URL");
+    require(elapsed < std::chrono::seconds(2),
+            "audio URL resolver cancellation must not wait for process timeout");
+}
 void testStdoutLimitIsEnforced() {
     TemporaryExecutable executable("#!/bin/sh\nprintf '%02048d' 0\n");
     yoinks::YtDlpResolverConfig config;
@@ -175,6 +196,7 @@ int main() {
         testClosedStandardDescriptorsDoNotBreakSpawn();
         testProcessTimeoutIsEnforced();
         testCancellationTerminatesProcessGroup();
+        testAudioUrlCancellationTerminatesProcessGroup();
         testStdoutLimitIsEnforced();
         std::cout << "All yt-dlp resolver tests passed\n";
         return 0;
