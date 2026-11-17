@@ -497,7 +497,7 @@
     <string name="pref_youtube_bridge_token_key" translatable="false">youtube_bridge_token</string>
     <string name="preference_youtube_bridge_title">YouTube Audio Bridge</string>
     <string name="preference_youtube_bridge_url_title">Adres Raspberry Pi Bridge</string>
-    <string name="preference_youtube_bridge_url_summary">Lokalny adres usługi, np. http://raspberrypi:8787</string>
+    <string name="preference_youtube_bridge_url_summary">Adres HTTPS usługi Raspberry Pi, np. https://radio.example.org</string>
     <string name="preference_youtube_bridge_token_title">Token dostępu Bridge</string>
     <string name="preference_youtube_bridge_token_summary">Token Bearer otrzymany z konfiguracji usługi Raspberry Pi</string>
     <string name="youtube_bridge_not_configured">Skonfiguruj adres i token YouTube Audio Bridge w ustawieniach.</string>
