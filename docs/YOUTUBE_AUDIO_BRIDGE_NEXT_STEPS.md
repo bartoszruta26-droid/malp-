@@ -220,3 +220,15 @@ The local HTTP proxy is a streaming relay, not a download manager. It must strea
 
 ### Zasada odbioru
 Nie publikować APK jako „gotowego do instalacji” na podstawie samego CI. Wymagane: końcowy green build dla aktualnego SHA, artefakt APK z tego SHA, test instalacji/uruchomienia na emulatorze oraz test funkcji mostu na docelowym środowisku. Sekrety tokenu Bearer nie mogą trafiać do logów ani do publicznych artefaktów.
+
+
+### Follow-up — ACTION_SEND_MULTIPLE payload compatibility and test coverage (17.11.2026)
+- Reviewed the Android share handler against the actual Android Intent contract. The previous implementation assumed `EXTRA_TEXT` was always an `ArrayList<CharSequence>` for `ACTION_SEND_MULTIPLE`; senders may provide a single `CharSequence` or an iterable list. That assumption could silently ignore valid shares or cause a type-cast failure.
+- Replaced the typed extra getter with safe inspection of `Bundle.get(Intent.EXTRA_TEXT)`. A single `CharSequence` and an `Iterable` of text payloads are now supported; unsupported payload types are ignored. Existing one-distinct-link-only behavior is preserved.
+- Added an iterable overload to `YouTubeShareParser` that merges URLs in encounter order, de-duplicates them, and ignores non-text elements.
+- Added unit cases for multiple text payloads, duplicate links, non-text values and null iterable input.
+- Added JUnit 4.13.2 and Robolectric 4.13.2 test dependencies, enabled Android resources in local unit tests, and annotated the parser suite with `RobolectricTestRunner`.
+- Extended `.github/workflows/android-build.yml` to run `:app:testDebugUnitTest` before `:app:assembleDebug`. Earlier Android CI only assembled the APK and did not execute the unit test suite.
+- Commits: parser `35d4e890a8cfa02c449f72b7ec13761b51907948`; activity `9c4ff8eda34343870b02415a24c6f534abe484e0`; tests `f674aa623c0ddb9c468cad22719c71388a38d187`; Robolectric configuration `6856443764464c85db690392e84c2372490d8b18` and `d12afc0a5645a0526b508cb02f8363833968a39f`; CI test step `e55c3d4cc3dfdf74deef8b88478ffb57b5a7ef6f`.
+- Verification run `44078827460` targets the workflow with the new unit-test step and the full accumulated tree. At the time this note was written, the run was still in progress before the unit-test step. Do not claim unit tests or the latest APK are green until this run completes successfully.
+- Existing successful debug APK artifact `14325425019` belongs to the earlier SHA `db00d37f5257711073e44f88c7e4a661d287bba1`; it is not the latest branch build and must not be presented as the current APK.
