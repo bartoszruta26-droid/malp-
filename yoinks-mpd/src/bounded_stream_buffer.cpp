@@ -9,8 +9,11 @@
 
 namespace yoinks {
 
-BoundedStreamBuffer::BoundedStreamBuffer(const std::size_t capacity)
-    : capacity_(capacity), storage_(capacity) {
+BoundedStreamBuffer::BoundedStreamBuffer(
+        const std::size_t capacity,
+        std::function<void()> before_writer_wait_for_tests)
+    : capacity_(capacity), storage_(capacity),
+      before_writer_wait_for_tests_(std::move(before_writer_wait_for_tests)) {
     if (capacity == 0) {
         throw std::invalid_argument("stream buffer capacity must be positive");
     }
@@ -24,6 +27,11 @@ bool BoundedStreamBuffer::write(const std::uint8_t* data, const std::size_t size
     std::size_t written = 0;
     std::unique_lock<std::mutex> lock(mutex_);
     while (written < size) {
+        if (size_ == capacity_ && before_writer_wait_for_tests_) {
+            // Test callback runs under mutex_: it may signal an external
+            // condition, but must never call back into this buffer.
+            before_writer_wait_for_tests_();
+        }
         writable_.wait(lock, [this] {
             return size_ < capacity_ || closed_ || cancelled_;
         });
