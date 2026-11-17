@@ -256,3 +256,10 @@ Nie publikować APK jako „gotowego do instalacji” na podstawie samego CI. Wy
 - Added a dedicated Android emulator smoke-test step to the workflow in commit `654b4d632b51ad290da8dec2fd923e303d305ba6`: install APK on API 34 emulator, launch MainActivity, invoke explicit ACTION_SEND and ACTION_SEND_MULTIPLE intents with a valid test URL, and fail on AndroidRuntime fatal exceptions. This is a smoke test, not a substitute for full UI/instrumentation assertions or Pi/MPD playback.
 - A new workflow run should be generated for the workflow change. Verify its complete terminal result before considering emulator smoke testing passed. Do not present artifact `14327070567` as the APK built from the newer workflow commit unless a matching new run uploads a new artifact.
 - The historical note above that share handling was missing reflects an earlier audit snapshot; subsequent commits added the handler and the current implementation is included in the green unit-test/build run. Emulator verification is now being added separately.
+
+
+### Emulator smoke-test correction — 17.11.2026
+- Workflow run `44080403049` completed with unit tests and debug APK assembly successful, but the emulator smoke-test step failed before installation.
+- The failure was in the workflow harness, not an Android runtime crash: the smoke-test script could not find the APK at its relative path after the emulator action started. Emulator boot completed, but `adb install` and intent checks were never reached.
+- Updated the workflow to resolve the APK using the absolute `$GITHUB_WORKSPACE` path and emit a workspace APK search diagnostic if the file is absent. Commit: `32bd484895ee80764e99a1a741f895f170c0f370`.
+- Await the new run. The emulator test is only green if the step reaches install, launches MainActivity, executes both share intents, and completes the fatal-exception check. Artifact upload must also succeed for the same head SHA.
