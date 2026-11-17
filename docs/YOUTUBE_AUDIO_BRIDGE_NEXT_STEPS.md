@@ -317,3 +317,13 @@ Nie publikować APK jako „gotowego do instalacji” na podstawie samego CI. Wy
 - The 10 tests include both `http_api_integration` (HTTP metadata/playlist → yt-dlp fixture → lazy proxy sessions → MPD mock) and `http_stream_byte_integration` (HTTP queue → MPD mock → lazy resolver → bounded RAM buffer → HTTP chunked stream, with exact payload comparison).
 - The byte-stream test uses an explicit test-only transport override. Production leaves it unset and uses libcurl. Therefore the successful CI result proves the C++ proxy and chunked HTTP data path with deterministic fixture bytes, not a real TLS connection to Google's CDN.
 - Still outstanding: successful real libcurl/TLS retrieval from a valid googlevideo URL, target Raspberry Pi MPD CURL-input compatibility, and audible playback verification. No production MPD configuration or queue has been changed.
+
+
+### Real libcurl TLS → HTTP byte-stream integration — 2026-11-17
+
+- Replaced the earlier fake upstream transport override with the normal libcurl path. The test-only configuration now supplies a temporary CA bundle and a CURLOPT_CONNECT_TO mapping; production configuration leaves both unset.
+- The integration test creates a short-lived self-signed test certificate with the exact hostname rr1.googlevideo.com, starts a local OpenSSL HTTPS file server on an unprivileged port, and has the yt-dlp fixture return an HTTPS URL on that hostname.
+- libcurl connects to the local TLS fixture while retaining the original rr1.googlevideo.com URL host for SNI and certificate hostname verification. The HTTP endpoint streams the fixture file as chunked HTTP; the test compares the received bytes exactly.
+- CI run 44090166568 completed successfully for commit 2d0176dd18407ce5995c6a4defdefc0a247bc75b. C++ compilation succeeded and all 10/10 CTest tests passed, including playlist ordering, authenticated HTTP queueing, actual libcurl TLS verification, and byte-for-byte proxy output.
+- This verifies the HTTP → yt-dlp fixture → HTTPS/libcurl → bounded RAM buffer → local chunked HTTP path and MPD queue insertion against a mock MPD. It does not yet verify a live YouTube/googlevideo response or playback on the Raspberry Pi's MPD daemon.
+- Test-only CA and connect-to settings are internal configuration fields and are not read from environment variables by the production executable. Only the dedicated test fixture server supplies them.
