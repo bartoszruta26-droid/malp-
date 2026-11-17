@@ -51,6 +51,9 @@ int main() {
         yoinks::MpdQueueManagerConfig mpd_config;
         mpd_config.port = portFromEnvironment("YOINKS_MPD_MPD_PORT", "6600");
         mpd_config.stream_port = config.port;
+        // Metadata resolution is capped at 30 s; two MPD round-trips together
+        // are capped at 30 s so Android's 65 s response timeout remains sufficient.
+        mpd_config.operation_timeout_milliseconds = 15000;
         auto mpd = std::make_shared<yoinks::MpdQueueManager>(std::move(mpd_config));
 
         yoinks::YoutubeQueueServiceConfig queue_config;
