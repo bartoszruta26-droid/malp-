@@ -416,17 +416,19 @@ Nie publikować APK jako „gotowego do instalacji” na podstawie samego CI. Wy
 
 ## Current verification state — 2026-11-17
 
-- Current tested feature commit: `6e880cb9e5a15014a5e3e290bb019548147d23ba`.
-- GitHub Actions run `44118536311`: success.
-- Raspberry Pi: targeted lazy-session tests passed; full CTest **11/11 passed** in 5.17 seconds; clean working tree.
-- The production service and installed binary were not changed by this test cycle.
+- Current tested feature commit: `bffc9c91b15741f9282bc9ae77b7a28ae53929f8`.
+- GitHub Actions run `44120703708`: success for the exact commit; configure, build, and test passed.
+- Raspberry Pi: build succeeded; targeted lazy-session test passed; full CTest **11/11 passed** in 5.09 seconds; clean working tree.
+- Coordinated shutdown test passed: shutdown rejects new creates, waits for an in-flight activation paused after upstream start/before publication, and returns after that activation discards and joins its unpublished upstream.
+- The shutdown barrier counts in-flight `activate()` calls. The owner must stop dispatching other public registry operations before object destruction. Do not treat this API as protection against concurrent destruction through a raw object reference.
+- Production service and installed binary were not changed by this test cycle.
 
 ## Next implementation sequence
 
-1. **Registry shutdown/destruction race:** design a deterministic test where an activation is paused after upstream worker start but before stream publication while registry destruction begins. First inspect object-lifetime ownership: `clear()` currently removes sessions, but that alone does not prove that concurrent `activate()` calls have exited before the registry's mutex/configuration are destroyed. Do not add a test that invokes methods on an already-destroyed object or rely on undefined behavior. If a real lifetime gap is confirmed, implement explicit shutdown coordination (reject new operations, signal cancellation, wait for in-flight registry operations to leave) with careful condition-variable/RAII accounting, then test cancellation, worker join, and absence of use-after-free under sanitizers where available.
-2. Audit concurrent `activate()`, `release()`, `erase()`, `clear()`, and `retainOnly()` transitions, including repeated retries, token replacement, and active-slot accounting.
-3. Exercise slow consumers/back-pressure, client disconnect, upstream timeout/error, byte-limit enforcement, reconnect/re-resolution, and service shutdown.
-4. Complete the URL/DNS/SSRF review, including DNS-resolved private, loopback, and link-local address handling while preserving TLS hostname verification.
-5. Keep live YouTube/CDN retrieval, target Raspberry Pi MPD CURL-input compatibility, audible hardware output, and RAM-only/no-persistent-storage behavior as separate acceptance gates.
+1. **Review shutdown integration and operation ownership:** inspect all registry call sites and prove that no control-request worker remains when shutdown begins, and that stream-worker ownership keeps the registry alive until `stream_workers.join()` completes. Add focused tests for shutdown racing with `release()`, `erase()`, `clear()`, and `retainOnly()` only where their object-lifetime contract is valid. Consider whether a general public-operation guard is warranted or whether server-level quiescence is sufficient.
+2. **Sanitizer/lifecycle stress:** run AddressSanitizer/UndefinedBehaviorSanitizer where supported, repeat deterministic lifecycle tests, and add bounded stress coverage for concurrent activate/release/erase/clear/retainOnly transitions and slot accounting.
+3. **Streaming robustness:** exercise slow consumers/back-pressure, client disconnect, upstream timeout/error, byte-limit enforcement, reconnect/re-resolution, and orderly server shutdown.
+4. **URL/DNS/SSRF review:** inspect DNS-resolved private, loopback, and link-local address handling while preserving TLS hostname verification; add tests before changing resolution/pinning behavior.
+5. **Separate acceptance gates:** verify live YouTube/CDN retrieval on Raspberry Pi, actual MPD CURL-input compatibility, audible hardware output, and RAM-only/no-persistent-storage behavior. These are not established by the current fixture-based tests.
 
 No production binary installation or service restart without explicit user approval.
