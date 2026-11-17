@@ -1153,3 +1153,12 @@ Dodano testy protokołu dla zdarzenia playlisty, zdarzenia niezwiązanego z play
 - Testy pozostają odczytowe: nie wykonują mutacji kolejki ani komend playback.
 - Oczekują na wynik CI dla commita zawierającego tę zmianę. Testy limitu odpowiedzi i awarii połączenia pozostają do dalszego rozszerzenia; nie uznajemy ich za pokryte.
 - Obserwator nadal nie jest zintegrowany z main.cpp, a automatyczna konwersja YouTube pozostaje wyłączona.
+
+
+## Testy limitu odpowiedzi i błędu połączenia — 2026-11-17
+
+- Dodano test przekroczenia limitu liczby linii odpowiedzi command-list (8320 linii), oczekujący na bezpieczne odrzucenie snapshotu.
+- Dodano test zamkniętego lokalnego portu MPD, sprawdzający jawny błąd `mpd_connect_failed` bez ingerencji w usługę produkcyjną.
+- Testy korzystają wyłącznie z lokalnych atrap/gniazda testowego; nie łączą się z Raspberry Pi ani z zewnętrznym MPD.
+- CI musi potwierdzić kompilację i zachowanie tych przypadków przed dalszą integracją watchera.
+- Integracja watchera z `main.cpp` oraz automatyczna konwersja YouTube pozostają nieaktywne.

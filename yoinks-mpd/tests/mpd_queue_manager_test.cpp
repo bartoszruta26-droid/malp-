@@ -324,6 +324,29 @@ void testCommandListAckAndMissingSeparatorAreRejected() {
                           "mpd_snapshot_protocol_invalid", "missing list_OK must be rejected");
 }
 
+void testSnapshotResponseLineLimitIsEnforced() {
+    std::string response;
+    for (std::size_t i = 0; i < 8320; ++i) response += "x\\n";
+    response += "list_OK\\nstate: stop\\nOK\\n";
+    expectSnapshotFailure(response, "mpd_snapshot_response_too_large",
+                          "snapshot response line limit must be enforced");
+}
+
+void testSnapshotConnectionFailureIsReported() {
+    asio::io_context context;
+    tcp::acceptor acceptor(context, tcp::endpoint{asio::ip::address_v4::loopback(), 0});
+    const auto unused_port = acceptor.local_endpoint().port();
+    boost::system::error_code ignored;
+    acceptor.close(ignored);
+    yoinks::MpdQueueManagerConfig config;
+    config.port = unused_port;
+    config.operation_timeout_milliseconds = 500;
+    yoinks::MpdQueueManager manager(config);
+    const auto snapshot = manager.listPlaylistState();
+    require(!snapshot.success && snapshot.error_code == "mpd_connect_failed",
+            "closed MPD endpoint must report connection failure");
+}
+
 void testInvalidProxyUriIsRejectedBeforeConnecting() {
     yoinks::MpdQueueManagerConfig config;
     config.port = 1;
@@ -354,6 +377,8 @@ int main() {
         testMalformedPlaylistEntriesAreRejected();
         testInvalidAndUnknownPlayerStatesAreRejected();
         testCommandListAckAndMissingSeparatorAreRejected();
+        testSnapshotResponseLineLimitIsEnforced();
+        testSnapshotConnectionFailureIsReported();
         testInvalidProxyUriIsRejectedBeforeConnecting();
         std::cout << "All MPD queue manager tests passed\n";
         return 0;
