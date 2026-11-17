@@ -11,6 +11,7 @@ resolver_file="$(mktemp)"
 mpd_log="$(mktemp)"
 resolver_log="$(mktemp)"
 stream_ids_file="$(mktemp)"
+stream_body=""
 mpd_pid=""
 server_pid=""
 
@@ -23,7 +24,8 @@ cleanup() {
         kill "$mpd_pid" 2>/dev/null || true
         wait "$mpd_pid" 2>/dev/null || true
     fi
-    rm -f "$log_file" "$resolver_file" "$mpd_log" "$resolver_log" "$stream_ids_file" "$resolver_file.expected" "$stream_body"
+    rm -f "$log_file" "$resolver_file" "$mpd_log" "$resolver_log" "$stream_ids_file" "$resolver_file.expected"
+    if [[ -n "$stream_body" ]]; then rm -f "$stream_body"; fi
 }
 trap cleanup EXIT
 trap 'status=$?; echo "HTTP integration failed at line $LINENO: $BASH_COMMAND" >&2; cat "$log_file" "$mpd_log" "$resolver_log" >&2; exit "$status"' ERR
