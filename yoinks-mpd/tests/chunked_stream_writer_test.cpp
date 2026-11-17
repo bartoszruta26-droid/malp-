@@ -35,7 +35,7 @@ void testProgressiveChunkFramingAndSuccessfulEof() {
         });
     require(completed, "successful upstream must complete chunk writer");
     require(offset == payload.size(), "reader must be consumed progressively");
-    require(wire.compare(0, 6, "4000\r\n") == 0,
+    require(wire.substr(0, 4) == "4000" && wire.substr(4, 2) == "\r\n",
             "first chunk must be capped at 16 KiB");
     require(wire.size() > payload.size(), "wire output must include chunk framing");
     require(wire.compare(wire.size() - 5, 5, "0\r\n\r\n") == 0,
