@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <atomic>
 #include <string>
 #include <vector>
 
@@ -41,9 +42,13 @@ class YtDlpResolver final {
 public:
     explicit YtDlpResolver(YtDlpResolverConfig config = {});
 
-    MetadataResult resolveMetadata(const std::string& youtube_url) const;
+    // A caller-owned flag may be set from another thread to terminate yt-dlp.
+    // The flag must outlive the synchronous resolver call.
+    MetadataResult resolveMetadata(const std::string& youtube_url,
+                                    const std::atomic_bool* cancellation = nullptr) const;
     // Returns a validated googlevideo HTTPS URL in memory only.
-    bool resolveAudioUrl(const std::string& video_id, std::string& output_url) const;
+    bool resolveAudioUrl(const std::string& video_id, std::string& output_url,
+                         const std::atomic_bool* cancellation = nullptr) const;
 
     static bool isValidVideoId(const std::string& video_id) noexcept;
 
