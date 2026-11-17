@@ -146,3 +146,13 @@ Niniejsza sekcja jest nadrzędna wobec wcześniejszych fragmentów tego dokument
 6. Android nadal wymaga zgodności z kontraktem `POST /api/v1/queue` (jeżeli klient nadal wysyła `/resolve`) i bezpiecznego przechowywania tokenu. Nie ma gotowego APK ani potwierdzonego odtwarzania end-to-end.
 
 **Ocena:** przepływ serwerowy został połączony w kodzie, lecz pełna zgodność protokołu MPD, test sukcesu HTTP end-to-end, test na Raspberry Pi i integracja Androida pozostają otwarte. Nie scalać do `main` przed przejściem tych bramek.
+
+
+### Korekta kontraktu odpowiedzi API i obsługi sesji (2026-11-17)
+
+- Odpowiedź sukcesu `POST /api/v1/queue` zwraca `success`, `queued`, `started`, `playlist` oraz `rollback_complete`. Pole `started` jest prawdziwe wyłącznie po potwierdzeniu przez MPD komendy `playid`; `request_id` nie jest wymagane ani sztucznie generowane.
+- Klient Androida został dostosowany: brak opcjonalnego `request_id` nie blokuje odczytu potwierdzonej odpowiedzi. Komunikat o rozpoczęciu odtwarzania opiera się na polu `started`.
+- Rejestr lazy udostępnia rozróżnienie istniejącej sesji od nieznanego identyfikatora oraz stan błędu resolvera. Nieznana sesja zwraca HTTP 404, błąd aktywacji HTTP 502, a chwilowa aktywacja/wysyczenie limitu HTTP 503.
+- Drugie równoległe żądanie dla sesji, która jest już aktywowana, nie usuwa i nie anuluje pierwszego żądania.
+- Test HTTP z atrapą `yt-dlp` i zamkniętym portem MPD przechodzi przez walidację, resolver i adapter kolejki, a następnie oczekuje kontrolowanego HTTP 502 z MPD. Testy jednostkowe obejmują również odróżnianie stanu sesji i semantykę `play_now`.
+- Potwierdzony przebieg CI dla obsługi sesji i testów HTTP: `44060542148` — `success` (build oraz CTest). Nowszy przebieg po rozszerzeniu testu `play_now` należy sprawdzić oddzielnie.
