@@ -140,3 +140,30 @@ This is a hard acceptance requirement, not an optimization.
 ### Architecture clarification
 
 The local HTTP proxy is a streaming relay, not a download manager. It must stream bytes progressively from the upstream YouTube CDN to MPD with a bounded RAM buffer. A design that first downloads a complete item and then serves it over HTTP is explicitly rejected.
+
+
+## Post-audit continuation — 2026-11-17 (repository review)
+
+### Verified repository state
+- Feature head reviewed: `be8f2176fc696c628567674a7b957e7204b001cb`.
+- Latest Yoinks-MPD workflow run `44066634026`: success (configure, build, CTest, installer shell syntax and systemd unit validation).
+- Latest Android workflow run `44064310295`: success (Gradle debug assemble and APK artifact upload).
+- These are repository CI results, not Raspberry Pi playback or Android emulator evidence.
+- The feature branch and `master` have diverged (feature ahead by 333 commits, master ahead by 7). Do not merge the entire branch without a dedicated reconciliation/rebase plan. The master tree contains no feature-only paths, while the feature branch carries the Android bridge, Yoinks-MPD service, CI and audit documents.
+
+### Current technical blockers confirmed by source inspection
+1. `GET /api/v1/health` currently returns the literal `"control_ready":false`, even though the queue service is constructed and wired in `main.cpp`. Health must report dependency-aware readiness, not a hard-coded value. It should separately identify process liveness, control-plane readiness and media/MPD compatibility; a healthy HTTP process does not prove MPD playback.
+2. The Android manifest still sets `android:usesCleartextTraffic="true"`. The new bridge client requires HTTPS, but global cleartext remains enabled for the legacy application. Review actual legacy HTTP use and replace the global allowance with a narrowly scoped Network Security Config exception only if required; retain HTTPS-only bridge validation and add a regression test that bearer credentials are never sent over cleartext.
+3. The installer documentation `docs/yoinks-mpd/INSTALL_RASPBERRY_PI.md` is stale: it says the installer provisions only yt-dlp and does not create the proxy/systemd service, while the current `scripts/yoinks-mpd/install.sh` builds, installs and enables the C++ service. Bring docs into alignment before handing the installer to an operator.
+4. The current Yoinks-MPD CI workflow compiles/tests C++ and checks installer shell syntax and a transformed systemd unit, but does not execute the installer in a disposable Debian/Raspberry Pi-like root environment. Add safe shell-level tests for idempotence, token preservation, --no-start, --restart gating and failure cleanup without touching a host MPD or systemd service.
+5. Android build CI creates a debug APK artifact for 14 days; emulator/instrumentation tests and a release-signed artifact are not yet evidenced.
+
+### Next implementation sequence
+- W1: add explicit readiness model and deterministic tests for health states; health must not return `control_ready=true` until configured dependencies are constructed, and must not imply live MPD/CURL playback.
+- W2: test and narrow Android cleartext network policy without breaking existing MPD profile connections.
+- W3: reconcile Raspberry Pi install guide and the root bridge audit with the current installer behavior.
+- W4: add isolated installer tests and expand CI.
+- W5: add HTTP contract success-path tests with mock yt-dlp and mock MPD, then run MPD/CURL compatibility tests on the target Pi in a safe isolated instance.
+- W6: Android share-sheet instrumentation/emulator tests, including ACTION_SEND, malformed and multiple links, saved URL/token, HTTPS rejection, redirect rejection, enqueue/play_now and activity recreation.
+- Keep the hard requirement: audio payload only in bounded RAM buffers; no media file or persistent audio cache.
+- Keep production MPD queue and audio configuration untouched until the user explicitly runs isolated target-device tests.
