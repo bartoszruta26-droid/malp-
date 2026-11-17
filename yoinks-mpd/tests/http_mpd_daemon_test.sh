@@ -23,6 +23,12 @@ cleanup() {
 trap cleanup EXIT
 trap 'status=$?; echo "Real MPD integration failed at line $LINENO: $BASH_COMMAND" >&2; cat "$tmp/mpd.log" "$tmp/bridge.log" "$tmp/tls.log" >&2 2>/dev/null || true; exit "$status"' ERR
 
+if ! mpd --version 2>&1 | grep -Eiq 'curl'; then
+    echo "This MPD build does not advertise the CURL input plugin" >&2
+    mpd --version >&2
+    exit 1
+fi
+
 openssl req -x509 -newkey rsa:2048 -nodes -keyout "$tmp/key.pem" -out "$tmp/cert.pem" -days 1 -subj "/CN=rr1.googlevideo.com" -addext "subjectAltName=DNS:rr1.googlevideo.com" -addext "basicConstraints=critical,CA:TRUE" >/dev/null 2>&1
 
 # A valid 10-second, mono, 8 kHz, 16-bit PCM WAV; silence is sufficient for a null output.
