@@ -10,17 +10,17 @@ add_library(yoinks_mpd_core
     src/http_server.cpp
     src/http_upstream_stream.cpp
 )
-target_include_directories(yoinks_mpd_core PUBLIC include)
+target_include_directories(yoinks_mpd_core PUBLIC include ${Boost_INCLUDE_DIRS})
+target_compile_definitions(yoinks_mpd_core PUBLIC BOOST_ERROR_CODE_HEADER_ONLY)
 target_compile_options(yoinks_mpd_core PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic;-Werror>
 )
 find_package(Threads REQUIRED)
 find_package(CURL REQUIRED)
-find_package(Boost 1.74 REQUIRED COMPONENTS system)
+find_package(Boost 1.74 REQUIRED)
 find_package(nlohmann_json 3.2.0 REQUIRED)
 target_link_libraries(yoinks_mpd_core PUBLIC
     Threads::Threads
-    Boost::system
     nlohmann_json::nlohmann_json
     CURL::libcurl
 )
