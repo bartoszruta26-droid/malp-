@@ -54,7 +54,7 @@ std::string LazyStreamSessionRegistry::create(const std::string& video_id) {
     if (sessions_.size() >= config_.maximum_sessions) return {};
     for (unsigned attempt = 0; attempt < 4; ++attempt) {
         const auto id = generateId();
-        if (sessions_.emplace(id, Entry{video_id, nullptr, false, false, std::make_shared<std::atomic_bool>(false)}).second) return id;
+        if (sessions_.emplace(id, Entry{video_id, nullptr, false, false, false, std::make_shared<std::atomic_bool>(false)}).second) return id;
     }
     return {};
 }
