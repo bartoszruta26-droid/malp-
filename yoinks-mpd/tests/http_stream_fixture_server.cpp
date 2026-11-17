@@ -6,6 +6,9 @@
 #include "yoinks/mpd_queue_manager.hpp"
 
 #include <cstdlib>
+#include <algorithm>
+#include <atomic>
+#include <functional>
 #include <cstdint>
 #include <iostream>
 #include <limits>
