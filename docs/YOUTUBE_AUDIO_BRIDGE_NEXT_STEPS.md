@@ -232,3 +232,11 @@ Nie publikować APK jako „gotowego do instalacji” na podstawie samego CI. Wy
 - Commits: parser `35d4e890a8cfa02c449f72b7ec13761b51907948`; activity `9c4ff8eda34343870b02415a24c6f534abe484e0`; tests `f674aa623c0ddb9c468cad22719c71388a38d187`; Robolectric configuration `6856443764464c85db690392e84c2372490d8b18` and `d12afc0a5645a0526b508cb02f8363833968a39f`; CI test step `e55c3d4cc3dfdf74deef8b88478ffb57b5a7ef6f`.
 - Verification run `44078827460` targets the workflow with the new unit-test step and the full accumulated tree. At the time this note was written, the run was still in progress before the unit-test step. Do not claim unit tests or the latest APK are green until this run completes successfully.
 - Existing successful debug APK artifact `14325425019` belongs to the earlier SHA `db00d37f5257711073e44f88c7e4a661d287bba1`; it is not the latest branch build and must not be presented as the current APK.
+
+
+### CI correction — remove unnecessary Robolectric dependency (17.11.2026)
+- Android workflow run `44078827460` completed with failure during `:app:compileDebugUnitTestJavaWithJavac`: Gradle could not resolve `org.robolectric:robolectric:4.13.2` from the configured dependency repositories. The test task did not execute.
+- Reviewed `YouTubeShareParserTest`: it tests a pure Java URL parser and does not instantiate Android framework classes or require Android resources. Robolectric was therefore unnecessary overhead.
+- Removed the Robolectric runner annotation/imports and dependency, retaining JUnit 4.13.2 and the parser test cases. Removed the now-unneeded Android-resource unit-test option.
+- Commits: test runner removal `2aeb106939d394c953dd4f9b0d995028664296ff`; Gradle dependency cleanup `61a872ae5cc8485e4e238ca262a68e56ad05ea4f`.
+- A new CI run should be triggered by the `app/build.gradle` update. Await its terminal result; do not mark tests or APK as verified until unit tests, APK assembly and artifact upload all succeed for the same head SHA.
