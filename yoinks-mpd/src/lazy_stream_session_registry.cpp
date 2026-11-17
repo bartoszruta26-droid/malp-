@@ -193,6 +193,30 @@ bool LazyStreamSessionRegistry::release(const std::string& id, bool cancel_upstr
     return true;
 }
 
+std::size_t LazyStreamSessionRegistry::retainOnly(
+        const std::unordered_set<std::string>& live_ids) {
+    std::unordered_map<std::string, Entry> removed;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        for (auto it = sessions_.begin(); it != sessions_.end();) {
+            const bool active = it->second.activating || it->second.serving
+                    || (it->second.stream
+                        && it->second.stream->state() == UpstreamState::running);
+            if (live_ids.find(it->first) != live_ids.end() || active) {
+                ++it;
+                continue;
+            }
+            if (it->second.cancellation) it->second.cancellation->store(true);
+            auto current = it++;
+            removed.insert(std::move(*current));
+            sessions_.erase(current);
+        }
+    }
+    for (auto& item : removed) if (item.second.stream) item.second.stream->cancel();
+    for (auto& item : removed) if (item.second.stream) item.second.stream->wait();
+    return removed.size();
+}
+
 std::size_t LazyStreamSessionRegistry::size() const {
     std::lock_guard<std::mutex> lock(mutex_); return sessions_.size();
 }
