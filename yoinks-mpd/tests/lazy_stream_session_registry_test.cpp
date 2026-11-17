@@ -5,8 +5,10 @@
 #include "yoinks/lazy_stream_session_registry.hpp"
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <exception>
 #include <iostream>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -101,6 +103,47 @@ void testEraseCancelsResolverInFlight() {
     require(!registry.contains(id) && !registry.isFailed(id),
             "erased sessions must no longer be discoverable");
 }
+void testRetainOnlyPreservesInFlightActivation() {
+    yoinks::LazyStreamSessionRegistry registry;
+    const auto id = registry.create("qqAYW7uxErI");
+    std::mutex mutex;
+    std::condition_variable condition;
+    bool resolver_entered = false;
+    bool allow_resolver_to_finish = false;
+    bool activated = true;
+
+    std::thread worker([&] {
+        activated = registry.activate(id,
+            [&](const std::string&, std::string&, const std::atomic_bool*) {
+                std::unique_lock<std::mutex> lock(mutex);
+                resolver_entered = true;
+                condition.notify_all();
+                condition.wait(lock, [&] { return allow_resolver_to_finish; });
+                return false;
+            });
+    });
+
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        condition.wait(lock, [&] { return resolver_entered; });
+    }
+
+    const auto removed = registry.retainOnly({});
+    const bool preserved = registry.contains(id) && registry.activeCount() == 1;
+
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        allow_resolver_to_finish = true;
+    }
+    condition.notify_all();
+    worker.join();
+
+    require(removed == 0 && preserved,
+            "queue reconciliation must preserve a session while its resolver is in flight");
+    require(!activated && registry.contains(id) && registry.isFailed(id),
+            "a completed failed resolver must leave the retained capability available for retry");
+}
+
 void testReleaseRetainsQueuedCapabilityForReplay() {
     yoinks::LazyStreamSessionRegistry registry;
     const auto id = registry.create("qqAYW7uxErI");
@@ -144,6 +187,7 @@ int main() {
         testActivationResolvesOnlyOnDemandAndRejectsUntrustedUrl();
         testConcurrentActivationIsSingleFlight();
         testEraseCancelsResolverInFlight();
+        testRetainOnlyPreservesInFlightActivation();
         testReleaseRetainsQueuedCapabilityForReplay();
         testRetainOnlyPrunesSessionsRemovedFromMpdQueue();
         testSessionAndBufferLimitsAreValidated();
