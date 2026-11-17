@@ -408,7 +408,7 @@ void testRetainOnlyPreservesUnpublishedActivationAndSlotAccounting() {
                   << ", contains_after=" << registry.contains(first_id)
                   << ", active_after=" << registry.activeCount()
                   << ", second_activated_early=" << second_activated_early
-                  << '\\n';
+                  << '\n';
     }
     require(removed == 0,
             "retainOnly must preserve an in-flight unpublished activation");
