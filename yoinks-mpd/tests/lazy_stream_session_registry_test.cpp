@@ -509,6 +509,21 @@ void testShutdownSerializesWithConcurrentRegistryMutations() {
             condition.wait(lock, [&] {
                 return mutation_finished && shutdown_started.load();
             });
+        }
+
+        bool shutdown_rejected_new_create = false;
+        for (unsigned attempt = 0; attempt < 100000 && !shutdown_rejected_new_create; ++attempt) {
+            const auto probe = registry.create("dQw4w9WgXcQ");
+            if (probe.empty()) {
+                shutdown_rejected_new_create = true;
+            } else {
+                registry.erase(probe);
+                std::this_thread::yield();
+            }
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(mutex);
             allow_activation_to_finish = true;
         }
         condition.notify_all();
@@ -520,6 +535,8 @@ void testShutdownSerializesWithConcurrentRegistryMutations() {
         const bool empty = registry.size() == 0 && registry.activeCount() == 0;
         require(!activated, std::string("activation must be cancelled during shutdown race with ")
                 + names[index]);
+        require(shutdown_rejected_new_create,
+                std::string("shutdown must close create() while raced with ") + names[index]);
         require(shutdown_finished.load(),
                 std::string("shutdown must finish when raced with ") + names[index]);
         require(empty, std::string("shutdown must leave no sessions or active slots after ")
