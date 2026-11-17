@@ -191,3 +191,11 @@ All six reported cases passed: binary FIFO transfer and cleanup; playlist reject
 - User-reported Raspberry Pi verification for `63bf4b8a`: CMake build succeeded, the targeted lazy-session executable reported `All lazy stream session tests passed`, and full CTest passed **11/11** in 5.36 seconds. `git status --short` was empty.
 - This closes the targeted deterministic shutdown-versus-mutation test gate. It does not prove arbitrary concurrent destruction or provide a general guard for every public registry method. The owner-side quiescence and shared-ownership contract remains required.
 - No sanitizer run, live YouTube/CDN retrieval, audible hardware validation, persistent-storage/swap trace, production binary installation, service restart, or production MPD queue/playback change is claimed.
+
+
+## Sanitizer build added — verification pending (2026-11-17)
+
+- Added opt-in CMake option `YOINKS_MPD_ENABLE_SANITIZERS` in commit `f25b8a13`. When enabled with GNU or Clang, it applies AddressSanitizer and UndefinedBehaviorSanitizer plus frame pointers; the default build remains unchanged.
+- Added a separate Debug sanitizer configure/build/CTest sequence to `.github/workflows/yoinks-mpd-core.yml` in commit `fd9a330f`. The ordinary Release build/test remains a separate preceding job sequence.
+- GitHub Actions run `44123520539` is the workflow for exact head `fd9a330f`; it was still in progress at the time of this note. Do not claim sanitizer success until its sanitizer build and test steps complete successfully.
+- This changes build/test configuration only. It does not alter production service files, install a binary, restart MPD, or modify the queue.
