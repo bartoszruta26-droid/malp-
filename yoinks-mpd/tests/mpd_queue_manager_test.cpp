@@ -140,7 +140,11 @@ void testPlayNowStartsFirstNewSongOnlyWhenRequested() {
     mock.join();
     require(result.success && result.queued == 2, "play-now should add both entries");
     require(mock.commands().size() == 3, "play-now should issue one explicit playid");
-    require(mock.commands()[2] == "playid 700", "play-now should start the first new entry");
+    require(mock.commands()[0] == "addid \"" + sampleUris()[1] + "\" 0"
+            && mock.commands()[1] == "addid \"" + sampleUris()[0] + "\" 0",
+            "play-now must insert the playlist at the front in reverse insertion order");
+    require(result.song_ids[0] == 701 && mock.commands()[2] == "playid 701",
+            "play-now should start the first requested entry in final playlist order");
 }
 
 void testAddFailureRollsBackOnlyNewEntries() {
