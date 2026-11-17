@@ -242,3 +242,12 @@ All six reported cases passed: binary FIFO transfer and cleanup; playlist reject
 - The test now waits for both the selected mutation to finish and the actual shutdown gate signal, releases the paused activation, joins all workers, and verifies that a post-shutdown `create()` is rejected and the registry is empty.
 - This change removes the busy create/erase polling loop; it does not weaken the shutdown/mutation race cases or change production behavior when the test callback is unset.
 - CI and Raspberry Pi validation are pending. The DNS/IP SSRF finding remains deferred at the user's request.
+
+
+## Streaming back-pressure tests — deterministic blocked-writer synchronization (2026-11-17)
+
+- The CI run `44136751848` for lifecycle-test commit `0908495c` passed: Release CTest 11/11 and Debug ASan/UBSan CTest 11/11. The previous sanitizer timeout in the shutdown/mutation race is resolved at this tested revision.
+- Raspberry Pi execution of the exact tested revision is still pending; CI does not replace target-device validation.
+- Added a test-only notification seam to `BoundedStreamBuffer`, invoked only when a writer is actually blocked by a full buffer. The callback must only signal an external test condition and must not re-enter the buffer while its mutex is held.
+- Back-pressure drain and cancellation tests now wait for confirmed writer blocking before reading/cancelling. This removes scheduler-dependent assumptions from those tests while leaving default production construction unchanged.
+- The new buffer-test revision requires its own Release and ASan/UBSan CI pass.
