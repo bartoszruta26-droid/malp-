@@ -24,16 +24,10 @@ public final class YouTubeAudioBridgeClient {
     private static final int MAX_ITEMS = 200;
 
     public static final class Result {
-        public final String requestId;
-        public final String title;
-        public final boolean playlist;
         public final int queued;
         public final boolean started;
 
-        Result(String requestId, String title, boolean playlist, int queued, boolean started) {
-            this.requestId = requestId;
-            this.title = title;
-            this.playlist = playlist;
+        Result(int queued, boolean started) {
             this.queued = queued;
             this.started = started;
         }
@@ -124,12 +118,7 @@ public final class YouTubeAudioBridgeClient {
         if (queued < 1 || queued > MAX_ITEMS) {
             throw new IOException("Bridge returned an invalid queued item count");
         }
-        // API v1 confirms the queue count and playback state. A request identifier
-        // is optional and is not fabricated by the server.
-        String requestId = json.optString("request_id", "");
-        return new Result(requestId, json.optString("title", ""),
-                json.optBoolean("playlist", queued > 1), queued,
-                json.optBoolean("started", false));
+        return new Result(queued, json.optBoolean("started", false));
     }
 
     private static String readBounded(InputStream input) throws IOException {
