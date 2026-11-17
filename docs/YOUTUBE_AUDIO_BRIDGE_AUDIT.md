@@ -124,3 +124,12 @@ All six reported cases passed: binary FIFO transfer and cleanup; playlist reject
 - Git checkout reported HEAD and origin at `2f40a5f8` and an empty `git status --short`.
 - Review note: existing registry tests cover resolver-in-flight cancellation and queue reconciliation, but do not yet deterministically force the narrow race after upstream worker start and before stream publication. Add a controlled regression test before declaring this concurrency edge fully covered.
 - This verification does not establish live YouTube/CDN playback, audible hardware output, or persistent-storage/swap behavior during a long real stream.
+
+
+## Follow-up review — release during lazy activation (2026-11-17)
+
+- Code change under verification: commits `25030068`, `5fb5d0fa`, and `36d9f70a` on `feature/youtube-audio-bridge`.
+- Review identified a lifecycle gap: `release(id, true)` could set and then immediately clear the activation reservation while an earlier resolver was still running; it also did not signal that resolver's cancellation token. This could permit overlapping activation attempts.
+- The implementation now signals the current session cancellation token during `release(id, true)`. If activation is already in progress, release leaves its reservation intact for the activation to finish. A later explicit retry receives a new uncancelled token.
+- Added a deterministic regression test that holds the resolver until cancellation, verifies release signals it, verifies overlapping activation is rejected while the resolver remains blocked, and verifies a later retry gets a fresh token.
+- The latest test commit is `36d9f70aed0bef8e9863c277165a8ad1dea28a65`. GitHub Actions was still running at the time this addendum was written. Raspberry Pi build/CTest verification is pending; do not treat this change as validated until the user reports those results.
