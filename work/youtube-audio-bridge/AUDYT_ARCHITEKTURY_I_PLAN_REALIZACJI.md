@@ -1172,3 +1172,15 @@ Dodano testy protokołu dla zdarzenia playlisty, zdarzenia niezwiązanego z play
 - Poprawka testu: commit `edc32ae56de8efe4769188d3d994f232d729e733`. Treść pliku ponownie pobrano z GitHub i sprawdzono.
 - Wynik nowego CI dla poprawki wymaga potwierdzenia; do czasu zakończenia nie uznawać testów za zaliczone.
 - Integracja watchera, automatyczna konwersja URL YouTube i wdrożenie na Raspberry Pi pozostają nieaktywne.
+
+
+## Integracja obserwatora playlisty — etap odczytowy (2026-11-17)
+
+- CI po korekcie fixture snapshotu: run `44151739744` — **success**, w tym kompilacja, CTest oraz build i test ASan/UBSan.
+- Zintegrowano opcjonalny worker obserwatora z istniejącym `HttpServer::run()`; nie powstaje osobny demon, proces ani port.
+- Włączenie jest jawne przez `YOINKS_MPD_PLAYLIST_WATCH=true` (domyślnie `false`). Przy wyłączonej opcji ścieżka startowa zachowuje dotychczasowe działanie.
+- Worker utrzymuje osobne, jednorazowe połączenie MPD `idle playlist`, po zdarzeniu pobiera świeży snapshot przez istniejący `MpdQueueManager::listPlaylistState()`. Połączenie `idle` nie jest współdzielone z poleceniami snapshotu.
+- Timeout subskrypcji wynosi 5 s, co ogranicza czas zatrzymania. Przy błędzie transportu worker ponawia połączenie z wykładniczym opóźnieniem do 10 s. SIGINT/SIGTERM ustawia flagę zatrzymania; worker jest dołączany przed zamykaniem pozostałych pul.
+- Logi zawierają wyłącznie liczbę pozycji, stan MPD i kod błędu. Nie logują URI, URL YouTube, tokenów ani metadanych utworów.
+- **Worker jest wyłącznie obserwacyjny:** nie rozwiązuje URL, nie tworzy sesji, nie dodaje/usuwa/przesuwa pozycji i nie wywołuje playback. Brak automatycznej konwersji pozostaje zamierzony.
+- Nowy etap wymaga odrębnego CI. Testy cyklu życia i reconnect watchera oraz bezpieczna akceptacja surowego URL przez docelowy MPD nadal pozostają otwarte. Nie uruchamiać opcji na Raspberry Pi przed potwierdzeniem CI i kontrolowanym teście.
