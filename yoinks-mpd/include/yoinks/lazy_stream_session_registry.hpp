@@ -12,6 +12,8 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 namespace yoinks {
 
@@ -42,6 +44,7 @@ public:
     bool contains(const std::string& id) const;
     bool isFailed(const std::string& id) const;
     bool release(const std::string& id, bool cancel_upstream);
+    std::size_t retainOnly(const std::unordered_set<std::string>& live_ids);
     bool erase(const std::string& id);
     void clear();
     std::size_t size() const;
