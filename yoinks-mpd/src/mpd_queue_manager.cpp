@@ -56,6 +56,7 @@ bool writeCommand(beast::tcp_stream& stream, const std::string& command,
 
 struct CommandReply {
     bool success{false};
+    bool rejected{false};
     std::vector<std::string> lines;
 };
 
@@ -63,7 +64,7 @@ CommandReply command(beast::tcp_stream& stream, asio::streambuf& buffer,
                      const std::string& text,
                      std::chrono::steady_clock::time_point deadline) {
     CommandReply reply;
-    if (text.find_first_of("\r\n\0") != std::string::npos
+    if (text.find('\0') != std::string::npos || text.find_first_of("\r\n") != std::string::npos
             || !writeCommand(stream, text + "\n", deadline)) return reply;
     std::size_t bytes = 0;
     for (std::size_t count = 0; count < 32; ++count) {
@@ -72,7 +73,7 @@ CommandReply command(beast::tcp_stream& stream, asio::streambuf& buffer,
         bytes += line.size() + 1;
         if (bytes > 8192) return reply;
         if (line == "OK") { reply.success = true; return reply; }
-        if (line.rfind("ACK ", 0) == 0) return reply;
+        if (line.rfind("ACK ", 0) == 0) { reply.rejected = true; return reply; }
         reply.lines.push_back(std::move(line));
     }
     return reply;
@@ -159,9 +160,18 @@ MpdQueueResult MpdQueueManager::enqueue(const std::vector<std::string>& stream_u
     for (const auto& uri : stream_uris) {
         const auto reply = command(stream, buffer, "addid \"" + uri + "\"", deadline);
         std::uint32_t id = 0;
-        if (!reply.success || !parseSongId(reply, id)) {
+        if (!reply.success) {
             result.rollback_complete = rollback(stream, buffer, result.song_ids, deadline);
-            result.error_code = "mpd_add_failed";
+            if (!reply.rejected) result.rollback_complete = false;
+            result.error_code = reply.rejected ? "mpd_add_rejected" : "mpd_add_outcome_unknown";
+            result.queued = 0;
+            result.song_ids.clear();
+            return result;
+        }
+        if (!parseSongId(reply, id)) {
+            result.rollback_complete = rollback(stream, buffer, result.song_ids, deadline);
+            result.rollback_complete = false;
+            result.error_code = "mpd_add_response_invalid";
             result.queued = 0;
             result.song_ids.clear();
             return result;
@@ -173,8 +183,15 @@ MpdQueueResult MpdQueueManager::enqueue(const std::vector<std::string>& stream_u
         const auto reply = command(stream, buffer, "playid "
                 + std::to_string(result.song_ids.front()), deadline);
         if (!reply.success) {
-            result.rollback_complete = rollback(stream, buffer, result.song_ids, deadline);
-            result.error_code = "mpd_play_now_failed";
+            if (reply.rejected) {
+                result.rollback_complete = rollback(stream, buffer, result.song_ids, deadline);
+            } else {
+                // The command may have started playback even if its reply was lost.
+                // Do not delete a possibly-current song on an ambiguous outcome.
+                result.rollback_complete = false;
+            }
+            result.error_code = reply.rejected ? "mpd_play_now_rejected"
+                    : "mpd_play_now_outcome_unknown";
             result.queued = 0;
             result.song_ids.clear();
             return result;
