@@ -88,6 +88,29 @@ void testAudioUrlMustBeAllowedCdnUrl() {
     require(url.empty(), "failed resolution must clear output URL");
 }
 
+void testResolverDoesNotInheritServiceToken() {
+    const char* previous = std::getenv("YOINKS_MPD_TOKEN");
+    const bool had_previous = previous != nullptr;
+    const std::string previous_value = had_previous ? previous : "";
+    require(setenv("YOINKS_MPD_TOKEN", "resolver-test-secret", 1) == 0,
+            "test should set a sentinel service token");
+
+    TemporaryExecutable executable(
+        "#!/bin/sh\n"
+        "[ -z \"${YOINKS_MPD_TOKEN+x}\" ] || exit 65\n"
+        "printf '%s\\n' '{\"id\":\"qqAYW7uxErI\",\"title\":\"isolated environment\"}'\n");
+    yoinks::YtDlpResolverConfig config;
+    config.executable = executable.path();
+    yoinks::YtDlpResolver resolver(config);
+    const auto result = resolver.resolveMetadata(
+            "https://www.youtube.com/watch?v=qqAYW7uxErI");
+
+    if (had_previous) setenv("YOINKS_MPD_TOKEN", previous_value.c_str(), 1);
+    else unsetenv("YOINKS_MPD_TOKEN");
+
+    require(result.success && result.entries.size() == 1,
+            "yt-dlp child must run successfully without inheriting the service token");
+}
 void testInvalidUserUrlIsRejectedBeforeSpawn() {
     TemporaryExecutable executable("#!/bin/sh\nexit 0\n");
     yoinks::YtDlpResolverConfig config;
@@ -192,6 +215,7 @@ int main() {
     try {
         testMetadataPlaylistIsParsedWithoutMediaDownload();
         testAudioUrlMustBeAllowedCdnUrl();
+        testResolverDoesNotInheritServiceToken();
         testInvalidUserUrlIsRejectedBeforeSpawn();
         testClosedStandardDescriptorsDoNotBreakSpawn();
         testProcessTimeoutIsEnforced();
