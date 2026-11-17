@@ -49,24 +49,10 @@ int main() {
         config.resolver = std::make_shared<yoinks::YtDlpResolver>(resolver_config);
 
         yoinks::LazyStreamSessionRegistryConfig session_config;
-        const std::string fixture_payload =
-                "yoinks-mpd-proxy-fixture\nsecond-chunk\nthird-chunk\n";
-        session_config.upstream.transport_override_for_tests =
-            [fixture_payload](const std::string& url,
-                    const std::function<bool(const std::uint8_t*, std::size_t)>& sink,
-                    const std::atomic_bool* cancellation) {
-                if (url != "https://rr1.googlevideo.com/videoplayback?fixture=1") return false;
-                constexpr std::size_t chunk_size = 7;
-                for (std::size_t offset = 0; offset < fixture_payload.size();
-                        offset += chunk_size) {
-                    if (cancellation != nullptr && cancellation->load()) return false;
-                    const std::size_t length = std::min(chunk_size,
-                            fixture_payload.size() - offset);
-                    if (!sink(reinterpret_cast<const std::uint8_t*>(
-                            fixture_payload.data() + offset), length)) return false;
-                }
-                return true;
-            };
+        session_config.upstream.test_ca_bundle_path_for_tests =
+                environment("YOINKS_MPD_TEST_CA_BUNDLE");
+        session_config.upstream.test_connect_to_for_tests =
+                environment("YOINKS_MPD_TEST_CONNECT_TO");
         config.sessions = std::make_shared<yoinks::LazyStreamSessionRegistry>(
                 std::move(session_config));
 
