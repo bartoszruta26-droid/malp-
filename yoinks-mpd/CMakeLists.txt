@@ -37,4 +37,6 @@ if(YOINKS_MPD_BUILD_TESTS)
         $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic;-Werror>
     )
     add_test(NAME bounded_stream_buffer COMMAND yoinks_mpd_core_tests)
+    add_test(NAME http_api_integration
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/http_api_test.sh $<TARGET_FILE:yoinks-mpd>)
 endif()
