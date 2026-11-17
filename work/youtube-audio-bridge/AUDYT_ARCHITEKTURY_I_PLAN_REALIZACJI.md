@@ -1031,3 +1031,77 @@ Dodano kompletny instalator `scripts/yoinks-mpd/install.sh` oraz jednostkę `scr
 - Walidacja jednostki w CI używa testowego `ExecStart=/bin/true` i `EnvironmentFile=/dev/null`, aby sprawdzić składnię i dyrektywy bez wymagania zainstalowanego programu na runnerze.
 - Ponowna instalacja nie restartuje aktywnej usługi domyślnie, aby nie przerwać odtwarzania. Jawne `--restart` może przerwać bieżący strumień; `--no-start` pomija uruchomienie.
 - CI potwierdza składnię, kompilację, testy i strukturę jednostki, ale nie wykonuje instalacji na Raspberry Pi ani nie testuje realnego MPD/CURL.
+
+
+---
+
+# Aktualizacja: potwierdzony odsłuch i wariant obserwatora playlisty MALP (2026-11-17)
+
+## Potwierdzony test na Raspberry Pi
+
+Użytkownik wykonał rzeczywiste żądanie do działającego Yoinks-MPD dla adresu YouTube w trybie `enqueue`. API zwróciło:
+
+```json
+{"playlist":false,"queued":1,"rollback_complete":true,"started":false,"success":true}
+```
+
+Użytkownik następnie potwierdził: **„Jest dźwięk”**.
+
+To jest potwierdzenie rzeczywistego odtwarzania przez istniejący MPD i tor audio HiFi dla ścieżki API → lokalne URI proxy → MPD. Nie jest to jednak potwierdzenie nowego wariantu, w którym MALP samodzielnie dodaje surowy URL YouTube do playlisty MPD. Odpowiedź `started:false` jest zgodna z semantyką `enqueue`: wpis został dodany, ale żądanie nie uruchamia odtwarzania.
+
+## Audyt istniejącego kodu pod kątem obserwatora
+
+Na HEAD `be327358425f912a169eff4da2fde3cc28c0177c` potwierdzono:
+
+- `main.cpp` uruchamia jeden serwer HTTP i tworzy jeden `MpdQueueManager` oraz jeden `YoutubeQueueService`.
+- `MpdQueueManager` potrafi dopisywać wyłącznie zaufane lokalne URI proxy przez `addid`; ma odczytowy `playlistinfo` używany do sprzątania sesji.
+- `YoutubeQueueService` przyjmuje URL z API, rozwiązuje metadane, tworzy lazy session i przekazuje lokalne URI do MPD.
+- W kodzie nie ma jeszcze połączenia MPD `idle`, obserwatora playlisty ani mechanizmu wykrywania URL YouTube dodanego bezpośrednio przez MALP.
+- Aktualna usługa nie przechwytuje komend MPD wysyłanych przez MALP. Samo uruchomienie Yoinks-MPD obok MPD nie powoduje automatycznej konwersji wpisów MALP.
+
+## Decyzja projektowa: obserwator jako rozszerzenie istniejącego procesu
+
+Docelowo obserwator ma działać wewnątrz istniejącego procesu `yoinks-mpd`, bez drugiej usługi i bez modyfikowania oficjalnego MALP:
+
+1. Osobne połączenie MPD utrzymuje `idle playlist`; nie wolno współdzielić połączenia będącego w stanie `idle` z poleceniami `playlistinfo`, `status`, `addid` lub `deleteid`.
+2. Po zdarzeniu `playlist` obserwator pobiera spójny snapshot `playlistinfo` oraz `status`, zapisując `songid`, `Pos`, URI i bieżący stan odtwarzania.
+3. Rozpoznawane są wyłącznie URL przechodzące istniejącą ścisłą walidację `isAllowedYouTubeUrl`. Lokalne URI proxy oraz wszystkie zwykłe wpisy pozostają bez zmian.
+4. Rozwiązywanie metadanych i tworzenie sesji korzysta z istniejącego `YtDlpResolver` i `LazyStreamSessionRegistry`; nie wolno tworzyć drugiego resolvera ani osobnego serwera strumieni.
+5. Przetwarzanie musi być idempotentne. Własne URI proxy nie mogą ponownie trafić do resolvera. Zmiany playlisty wykonane przez obserwator muszą być odróżnialne od zmian MALP.
+6. Zmiana pozycji odbywa się po `songid`, nie po samym indeksie `Pos`, ponieważ MALP może równolegle zmieniać kolejkę.
+7. Nie wolno używać `clear`, przebudowywać całej playlisty ani zmieniać trybów repeat/random/single/consume.
+
+## Krytyczne ograniczenie bezpieczeństwa odtwarzania
+
+Nie wolno bezwarunkowo wykonać `deleteid` dla aktualnie odtwarzanego wpisu YouTube. Usunięcie bieżącego song ID może zatrzymać lub zmienić odtwarzanie. Z tego powodu pierwsza wersja obserwatora powinna:
+
+- konwertować wyłącznie przyszłe pozycje, które nie są aktualnym `songid`;
+- dla aktualnie odtwarzanego YouTube zapisać stan `pending_current` i nie wykonywać destrukcyjnej podmiany;
+- przewidzieć osobną, przetestowaną procedurę przełączenia aktualnego wpisu dopiero wtedy, gdy da się zachować intencję użytkownika i nie przerwać aktualnie grającego zwykłego utworu;
+- po każdej mutacji ponownie pobrać snapshot i zweryfikować, czy pozycja docelowa nadal istnieje i czy nie zmienił się bieżący utwór.
+
+Obserwator oparty na `idle` jest asynchroniczny. Jeżeli MALP doda URL i natychmiast wyda `play`/ `playid`, istnieje wyścig między odtwarzaniem a konwersją. Nie wolno deklarować, że obserwator gwarantuje konwersję przed startem. Jeśli testy wykażą, że MALP może natychmiast uruchomić surowy URL, pełna gwarancja wymagałaby pośrednika protokołu MPD lub zmiany sposobu dodawania pozycji — nie należy ukrywać tego ograniczenia.
+
+## Bramki przed włączeniem automatycznej konwersji
+
+1. **Akceptacja URI:** na docelowym MPD sprawdzić, czy `addid "https://www.youtube.com/watch?..."` jest akceptowane i czy MPD zachowuje wpis jako URI, zamiast odrzucać go przy walidacji wejścia. Test musi używać odrębnej, kontrolowanej kolejki testowej albo pustego środowiska testowego; nie dotykać produkcyjnej kolejki.
+2. **Protokół idle:** dodać testy zdarzeń playlisty, wielu zmian w krótkim czasie, rozłączenia i ponownego połączenia oraz zmian zachodzących w trakcie pobierania snapshotu.
+3. **Współbieżność:** testować równoległe dodawanie/usuwanie/przesuwanie pozycji przez MALP. Każda mutacja ma być warunkowana ponowną weryfikacją `songid` i URI.
+4. **Bezpieczna konwersja:** testować pozycję przyszłą, aktualną odtwarzaną, zatrzymaną, usuniętą równolegle oraz duplikaty URL.
+5. **Zgodność sesji:** sprawdzić rollback, limity 200 wpisów, sprzątanie sesji oraz brak ponownego rozpoznawania lokalnego URI.
+6. **Uruchamianie:** watcher ma być opcjonalnie sterowany konfiguracją i domyślnie wyłączony do czasu ukończenia testów. Nie restartować działającej usługi automatycznie.
+
+## Status prac
+
+- [x] Audyt rzeczywistych ścieżek źródeł i punktu uruchomienia procesu.
+- [x] Potwierdzenie, że istniejący kod nie ma jeszcze obserwatora MPD.
+- [x] Zapisanie decyzji architektonicznej i warunków bezpieczeństwa.
+- [x] Zapisanie potwierdzonego przez użytkownika testu dźwięku ścieżki API.
+- [ ] Implementacja klienta MPD `idle` i snapshotu playlisty.
+- [ ] Testy wyścigów i idempotencji obserwatora.
+- [ ] Test potwierdzający, że docelowy MPD przyjmuje surowy URL YouTube jako wpis kolejki.
+- [ ] Implementacja bezpiecznej konwersji przyszłych wpisów.
+- [ ] Procedura dla aktualnie odtwarzanego wpisu.
+- [ ] Włączenie obserwatora po przejściu bramek.
+
+**Wniosek:** potwierdzony jest już rzeczywisty dźwięk z obecnej ścieżki API. Nowy wariant MALP → MPD → obserwator jest wykonalny jako rozszerzenie procesu Yoinks-MPD, ale nie został jeszcze zaimplementowany. Nie wolno aktywować destrukcyjnej podmiany bieżącego utworu ani zakładać, że MPD przyjmie surowy URL YouTube bez testu.
