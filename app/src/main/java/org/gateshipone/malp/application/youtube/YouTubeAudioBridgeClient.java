@@ -94,6 +94,12 @@ public final class YouTubeAudioBridgeClient {
                 String message = error == null
                         ? "Bridge HTTP " + status
                         : error.optString("message", "Bridge HTTP " + status);
+                if (!response.optBoolean("rollback_complete", true)) {
+                    int knownQueued = response.optInt("queued", 0);
+                    message += ". Wynik MPD jest niejednoznaczny; co najmniej "
+                            + Math.max(0, knownQueued)
+                            + " pozycji mogło zostać dodanych. Sprawdź kolejkę przed ponowieniem.";
+                }
                 throw new IOException(message);
             }
             return parseResponse(response);
