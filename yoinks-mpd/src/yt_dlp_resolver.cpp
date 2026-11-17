@@ -353,10 +353,10 @@ bool YtDlpResolver::resolveAudioUrl(const std::string& video_id,
     if (!process.success) return false;
 
     std::string candidate = process.output;
-    while (!candidate.empty() && (candidate.back() == '\\n' || candidate.back() == '\\r')) {
+    while (!candidate.empty() && (candidate.back() == '\n' || candidate.back() == '\r')) {
         candidate.pop_back();
     }
-    if (candidate.empty() || candidate.find_first_of("\\r\\n") != std::string::npos
+    if (candidate.empty() || candidate.find_first_of("\r\n") != std::string::npos
             || !HttpUpstreamStream::isAllowedResolvedUrl(candidate)) {
         return false;
     }
