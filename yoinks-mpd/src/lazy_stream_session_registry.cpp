@@ -54,13 +54,14 @@ std::string LazyStreamSessionRegistry::create(const std::string& video_id) {
     if (sessions_.size() >= config_.maximum_sessions) return {};
     for (unsigned attempt = 0; attempt < 4; ++attempt) {
         const auto id = generateId();
-        if (sessions_.emplace(id, Entry{video_id, nullptr, false, false}).second) return id;
+        if (sessions_.emplace(id, Entry{video_id, nullptr, false, false, std::make_shared<std::atomic_bool>(false)}).second) return id;
     }
     return {};
 }
 
 bool LazyStreamSessionRegistry::activate(const std::string& id, const ResolveAudioUrl& resolver) {
     std::string video_id;
+    std::shared_ptr<std::atomic_bool> cancellation;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         const auto found = sessions_.find(id);
@@ -73,11 +74,13 @@ bool LazyStreamSessionRegistry::activate(const std::string& id, const ResolveAud
         if (active >= config_.maximum_active_streams) return false;
         found->second.activating = true;
         video_id = found->second.video_id;
+        cancellation = found->second.cancellation;
     }
 
     std::string source_url;
     bool resolved = false;
-    try { resolved = resolver && resolver(video_id, source_url); } catch (...) { resolved = false; }
+    try { resolved = resolver && resolver(video_id, source_url, cancellation.get()); } catch (...) { resolved = false; }
+    if (cancellation->load()) resolved = false;
     if (!resolved || !HttpUpstreamStream::isAllowedResolvedUrl(source_url)) {
         std::lock_guard<std::mutex> lock(mutex_);
         const auto found = sessions_.find(id);
@@ -96,7 +99,11 @@ bool LazyStreamSessionRegistry::activate(const std::string& id, const ResolveAud
     {
         std::lock_guard<std::mutex> lock(mutex_);
         const auto found = sessions_.find(id);
-        if (found == sessions_.end()) { stream->cancel(); stream->wait(); return false; }
+        if (found == sessions_.end() || cancellation->load()) {
+            stream->cancel();
+            stream->wait();
+            return false;
+        }
         found->second.stream = std::move(stream);
         found->second.activating = false;
     }
@@ -115,6 +122,7 @@ bool LazyStreamSessionRegistry::erase(const std::string& id) {
         std::lock_guard<std::mutex> lock(mutex_);
         const auto found = sessions_.find(id);
         if (found == sessions_.end()) return false;
+        if (found->second.cancellation) found->second.cancellation->store(true);
         stream = std::move(found->second.stream);
         sessions_.erase(found);
     }
@@ -124,7 +132,11 @@ bool LazyStreamSessionRegistry::erase(const std::string& id) {
 
 void LazyStreamSessionRegistry::clear() {
     std::unordered_map<std::string, Entry> removed;
-    { std::lock_guard<std::mutex> lock(mutex_); removed.swap(sessions_); }
+    { 
+        std::lock_guard<std::mutex> lock(mutex_);
+        for (auto& item : sessions_) if (item.second.cancellation) item.second.cancellation->store(true);
+        removed.swap(sessions_);
+    }
     for (auto& item : removed) if (item.second.stream) item.second.stream->cancel();
     for (auto& item : removed) if (item.second.stream) item.second.stream->wait();
 }
