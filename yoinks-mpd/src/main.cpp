@@ -3,11 +3,16 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 #include "yoinks/http_server.hpp"
+#include "yoinks/mpd_queue_manager.hpp"
 
 #include <cstdlib>
 #include <exception>
 #include <iostream>
 #include <limits>
+#include <memory>
+#include <stdexcept>
+#include <utility>
+#include <vector>
 #include <string>
 
 namespace {
@@ -17,8 +22,9 @@ std::string environment(const char* name, const std::string& fallback) {
     return value == nullptr ? fallback : value;
 }
 
-std::uint16_t portFromEnvironment() {
-    const std::string value = environment("YOINKS_MPD_PORT", "8788");
+std::uint16_t portFromEnvironment(const char* variable = "YOINKS_MPD_PORT",
+                                  const char* fallback = "8788") {
+    const std::string value = environment(variable, fallback);
     std::size_t consumed = 0;
     const unsigned long parsed = std::stoul(value, &consumed);
     if (consumed != value.size() || parsed == 0
@@ -36,6 +42,37 @@ int main() {
         config.bind_address = environment("YOINKS_MPD_BIND", "127.0.0.1");
         config.port = portFromEnvironment();
         config.bearer_token = environment("YOINKS_MPD_TOKEN", "");
+
+        yoinks::YtDlpResolverConfig resolver_config;
+        resolver_config.executable = environment("YOINKS_MPD_YTDLP", "/usr/local/bin/yt-dlp");
+        config.resolver = std::make_shared<yoinks::YtDlpResolver>(std::move(resolver_config));
+        config.sessions = std::make_shared<yoinks::LazyStreamSessionRegistry>();
+
+        yoinks::MpdQueueManagerConfig mpd_config;
+        mpd_config.port = portFromEnvironment("YOINKS_MPD_MPD_PORT", "6600");
+        mpd_config.stream_port = config.port;
+        // Metadata resolution is capped at 30 s; two MPD round-trips together
+        // are capped at 30 s so Android's 65 s response timeout remains sufficient.
+        mpd_config.operation_timeout_milliseconds = 15000;
+        auto mpd = std::make_shared<yoinks::MpdQueueManager>(std::move(mpd_config));
+
+        yoinks::YoutubeQueueServiceConfig queue_config;
+        queue_config.stream_port = config.port;
+        queue_config.sessions = config.sessions;
+        queue_config.resolve_metadata = [resolver = config.resolver](const std::string& url) {
+            return resolver->resolveMetadata(url);
+        };
+        queue_config.enqueue = [mpd](const std::vector<std::string>& uris, bool play_now) {
+            return mpd->enqueue(uris, play_now);
+        };
+        queue_config.queued_session_ids = [mpd](std::vector<std::string>& ids) {
+            const auto snapshot = mpd->listStreamSessionIds();
+            if (!snapshot.success) return false;
+            ids = snapshot.stream_session_ids;
+            return true;
+        };
+        config.queue_service = std::make_shared<yoinks::YoutubeQueueService>(std::move(queue_config));
+
         yoinks::HttpServer server{std::move(config)};
         server.run();
     } catch (const std::exception& error) {
