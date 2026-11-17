@@ -551,3 +551,10 @@ Weryfikacja wykonana w środowisku roboczym: `bash -n` zakończyło się powodze
 ### Następny warunek blokujący
 
 Przed implementacją C++ relay należy otrzymać z docelowego Raspberry Pi raport diagnostyczny oraz wynik odtwarzania krótkiego, znanego strumienia HTTP na osobnej instancji MPD. Do tego czasu nie należy zmieniać produkcyjnej kolejki MPD ani implementować założeń o obsłudze HEAD/Range/seek bez obserwacji rzeczywistego klienta.
+
+
+## Korekta wymagań użytkownika — 2026-11-17
+
+Użytkownik jednoznacznie potwierdził, że wymaga **HTTP proxy**, a nie FIFO. Niniejsza decyzja zastępuje wszystkie wcześniejsze warianty i opisy prototypu. Named pipes, lokalne pliki audio i buforowanie na dysku są wykluczone z projektu. Jedyną ścieżką danych jest: MALP → API sterujące → yt-dlp (metadane/adres źródła, bez pobierania mediów) → C++ HTTP proxy z ograniczonym buforem RAM → stabilny lokalny HTTP URI → MPD CURL input.
+
+W ramach korekty usunięto z gałęzi skrypt producenta nazwanego potoku i jego testy. Instalator został zmieniony tak, aby instalował wyłącznie yt-dlp jako zależność resolvera; nie instaluje jeszcze proxy. Dokumentacja główna i instrukcja instalacji zostały zastąpione opisem HTTP-only. Implementacja C++ HTTP proxy pozostaje następnym zasadniczym etapem i nie jest jeszcze wykonana.
