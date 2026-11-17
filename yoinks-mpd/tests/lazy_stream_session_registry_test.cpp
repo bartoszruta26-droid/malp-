@@ -111,6 +111,18 @@ void testReleaseRetainsQueuedCapabilityForReplay() {
             "releasing an inactive session must not consume an upstream slot");
 }
 
+void testRetainOnlyPrunesSessionsRemovedFromMpdQueue() {
+    yoinks::LazyStreamSessionRegistry registry;
+    const auto queued = registry.create("qqAYW7uxErI");
+    const auto stale = registry.create("dQw4w9WgXcQ");
+    const std::unordered_set<std::string> live{queued};
+    const auto removed = registry.retainOnly(live);
+    require(removed == 1 && registry.size() == 1,
+            "reconciliation should remove only sessions absent from MPD");
+    require(registry.contains(queued) && !registry.contains(stale),
+            "live MPD capabilities must remain while stale capabilities are removed");
+}
+
 void testSessionAndBufferLimitsAreValidated() {
     yoinks::LazyStreamSessionRegistryConfig config;
     config.maximum_active_streams = 2;
@@ -133,6 +145,7 @@ int main() {
         testConcurrentActivationIsSingleFlight();
         testEraseCancelsResolverInFlight();
         testReleaseRetainsQueuedCapabilityForReplay();
+        testRetainOnlyPrunesSessionsRemovedFromMpdQueue();
         testSessionAndBufferLimitsAreValidated();
         std::cout << "All lazy stream session tests passed\n";
         return 0;
