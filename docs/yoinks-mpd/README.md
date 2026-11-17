@@ -1,6 +1,8 @@
 # Yoinks-MPD: YouTube audio through an HTTP proxy into MPD
 
-Status: **HTTP proxy architecture selected; proxy service and end-to-end playback are not yet implemented or verified.**
+Status (2026-11-17): **C++ proxy, queue API, resolver and Android client are implemented in `feature/youtube-audio-bridge`; CI build/tests pass on the recorded commits. End-to-end playback on the target Raspberry Pi and MPD/CURL compatibility remain unverified.**
+
+The component table and implementation-stage notes below include historical planning text. For the authoritative current implementation status, CI evidence and remaining release gates, see [the current architecture audit](../../work/youtube-audio-bridge/AUDYT_ARCHITEKTURY_I_PLAN_REALIZACJI.md).
 
 ## Goal
 
