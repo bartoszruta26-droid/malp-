@@ -43,7 +43,7 @@ public final class YouTubeAudioBridgeClient {
     private final String token;
 
     public YouTubeAudioBridgeClient(String baseUrl, String token) {
-        if (baseUrl == null || token == null || token.trim().isEmpty()) {
+        if (baseUrl == null || token == null) {
             throw new IllegalArgumentException("Bridge URL and access token are required");
         }
         String trimmed = baseUrl.trim();
@@ -52,8 +52,12 @@ public final class YouTubeAudioBridgeClient {
                 || trimmed.indexOf('#') >= 0) {
             throw new IllegalArgumentException("Bridge URL must be an HTTPS origin without credentials or query");
         }
+        String trimmedToken = token.trim();
+        if (!isValidBearerToken(trimmedToken)) {
+            throw new IllegalArgumentException("Bridge token must be 43-128 base64url characters");
+        }
         this.baseUrl = trimTrailingSlash(trimmed);
-        this.token = token.trim();
+        this.token = trimmedToken;
     }
 
     public Result queue(String youtubeUrl, String mode) throws IOException, JSONException {
@@ -142,6 +146,16 @@ public final class YouTubeAudioBridgeClient {
             }
         }
         return result.toString();
+    }
+
+    private static boolean isValidBearerToken(String value) {
+        if (value.length() < 43 || value.length() > 128) return false;
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+                    || (c >= '0' && c <= '9') || c == '_' || c == '-')) return false;
+        }
+        return true;
     }
 
     private static String trimTrailingSlash(String value) {
