@@ -5,6 +5,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+find_package(Threads REQUIRED)
+find_package(CURL REQUIRED)
+find_package(Boost 1.74 REQUIRED)
+find_package(nlohmann_json 3.2.0 REQUIRED)
+
 add_library(yoinks_mpd_core
     src/bounded_stream_buffer.cpp
     src/http_server.cpp
@@ -15,10 +20,6 @@ target_compile_definitions(yoinks_mpd_core PUBLIC BOOST_ERROR_CODE_HEADER_ONLY)
 target_compile_options(yoinks_mpd_core PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic;-Werror>
 )
-find_package(Threads REQUIRED)
-find_package(CURL REQUIRED)
-find_package(Boost 1.74 REQUIRED)
-find_package(nlohmann_json 3.2.0 REQUIRED)
 target_link_libraries(yoinks_mpd_core PUBLIC
     Threads::Threads
     nlohmann_json::nlohmann_json
