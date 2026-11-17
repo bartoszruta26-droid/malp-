@@ -77,7 +77,7 @@ bool LazyStreamSessionRegistry::activate(const std::string& id, const ResolveAud
         std::size_t active = 0;
         for (const auto& item : sessions_) {
             if (item.first == id) continue;
-            if (item.second.activating
+            if (item.second.activating || item.second.serving
                     || (item.second.stream
                         && item.second.stream->state() == UpstreamState::running)) {
                 ++active;
@@ -233,7 +233,7 @@ std::size_t LazyStreamSessionRegistry::activeCount() const {
     std::lock_guard<std::mutex> lock(mutex_);
     std::size_t count = 0;
     for (const auto& item : sessions_) {
-        if (item.second.activating || (item.second.stream
+        if (item.second.activating || item.second.serving || (item.second.stream
                 && item.second.stream->state() == UpstreamState::running)) ++count;
     }
     return count;
