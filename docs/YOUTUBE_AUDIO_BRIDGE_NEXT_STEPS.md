@@ -449,3 +449,11 @@ No production binary installation or service restart without explicit user appro
 3. **URL/DNS/SSRF review:** inspect DNS-resolved private, loopback, and link-local address handling while preserving TLS hostname verification; add focused tests before changing resolution or connection pinning.
 4. **Separate acceptance gates:** live YouTube/CDN retrieval on Raspberry Pi, actual MPD CURL-input capability on the target build, audible hardware output, and RAM-only/no-persistent-storage behavior including swap. Do not infer these from local fixture tests.
 5. No production binary installation, MPD queue/playback intervention, or service restart without explicit approval.
+
+
+## Sanitizer build introduced — pending CI result (2026-11-17)
+
+- Added opt-in `YOINKS_MPD_ENABLE_SANITIZERS` CMake option (`f25b8a13`) for GNU/Clang AddressSanitizer + UndefinedBehaviorSanitizer builds. It is OFF by default, so the normal target build flags remain unchanged.
+- Added a separate Debug sanitizer build and full CTest run to the C++ GitHub Actions workflow (`fd9a330f`). CI run `44123520539` is pending; inspect its individual steps before treating the sanitizer gate as complete.
+- After CI passes, the next target-device step is a separate sanitizer build directory, followed by the targeted lazy-session executable and full CTest. Do not overwrite `/tmp/yoinks-mpd-audit` or use the sanitizer binary as production.
+- Then add bounded lifecycle stress coverage and proceed to streaming robustness tests.
