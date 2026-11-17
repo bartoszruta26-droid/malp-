@@ -5,12 +5,15 @@
 #include "yoinks/yt_dlp_resolver.hpp"
 
 #include <cerrno>
+#include <atomic>
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <exception>
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -48,8 +51,10 @@ private:
 void testMetadataPlaylistIsParsedWithoutMediaDownload() {
     TemporaryExecutable executable(
         "#!/bin/sh\n"
-        "for arg in \"$@\"; do [ \"$arg\" = \"--dump-single-json\" ] && mode=metadata; done\n"
-        "[ \"${mode:-}\" = metadata ] || exit 64\n"
+        "for arg in \"$@\"; do\n"
+        "  case \"$arg\" in --dump-single-json) mode=metadata;; --skip-download) skip=1;; --no-cache-dir) cache=1;; --ignore-config) config=1;; esac\n"
+        "done\n"
+        "[ \"${mode:-}\" = metadata ] && [ \"${skip:-}\" = 1 ] && [ \"${cache:-}\" = 1 ] && [ \"${config:-}\" = 1 ] || exit 64\n"
         "printf '%s\\n' '{\"entries\":[{\"id\":\"qqAYW7uxErI\",\"title\":\"Fixture one\",\"duration\":12},{\"id\":\"dQw4w9WgXcQ\",\"title\":\"Fixture two\"}]}'\n");
     yoinks::YtDlpResolverConfig config;
     config.executable = executable.path();
@@ -65,8 +70,10 @@ void testMetadataPlaylistIsParsedWithoutMediaDownload() {
 void testAudioUrlMustBeAllowedCdnUrl() {
     TemporaryExecutable executable(
         "#!/bin/sh\n"
-        "for arg in \"$@\"; do [ \"$arg\" = \"--get-url\" ] && mode=url; done\n"
-        "[ \"${mode:-}\" = url ] || exit 64\n"
+        "for arg in \"$@\"; do\n"
+        "  case \"$arg\" in --get-url) mode=url;; --skip-download) skip=1;; --no-cache-dir) cache=1;; --ignore-config) config=1;; esac\n"
+        "done\n"
+        "[ \"${mode:-}\" = url ] && [ \"${skip:-}\" = 1 ] && [ \"${cache:-}\" = 1 ] && [ \"${config:-}\" = 1 ] || exit 64\n"
         "printf '%s\\n' 'https://r1---sn.googlevideo.com/videoplayback?expire=123'\n");
     yoinks::YtDlpResolverConfig config;
     config.executable = executable.path();
@@ -101,6 +108,28 @@ void testProcessTimeoutIsEnforced() {
             "slow yt-dlp process must be terminated at configured timeout");
 }
 
+
+void testCancellationTerminatesProcessGroup() {
+    TemporaryExecutable executable("#!/bin/sh\\nsleep 5\\n");
+    yoinks::YtDlpResolverConfig config;
+    config.executable = executable.path();
+    config.timeout_milliseconds = 10000;
+    yoinks::YtDlpResolver resolver(config);
+    std::atomic_bool cancelled{false};
+    std::thread trigger([&cancelled]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        cancelled.store(true, std::memory_order_relaxed);
+    });
+    const auto started = std::chrono::steady_clock::now();
+    const auto result = resolver.resolveMetadata(
+            "https://www.youtube.com/watch?v=qqAYW7uxErI", &cancelled);
+    trigger.join();
+    const auto elapsed = std::chrono::steady_clock::now() - started;
+    require(!result.success && result.error_code == "process_cancelled",
+            "caller cancellation must terminate the resolver process");
+    require(elapsed < std::chrono::seconds(2),
+            "cancellation must not wait for the process timeout");
+}
 void testStdoutLimitIsEnforced() {
     TemporaryExecutable executable("#!/bin/sh\nprintf '%02048d' 0\n");
     yoinks::YtDlpResolverConfig config;
@@ -120,6 +149,7 @@ int main() {
         testAudioUrlMustBeAllowedCdnUrl();
         testInvalidUserUrlIsRejectedBeforeSpawn();
         testProcessTimeoutIsEnforced();
+        testCancellationTerminatesProcessGroup();
         testStdoutLimitIsEnforced();
         std::cout << "All yt-dlp resolver tests passed\n";
         return 0;
