@@ -118,3 +118,5 @@ Dodano wstępny serwer HTTP C++ oparty na Boost.Beast i nlohmann-json. Implement
 Serwer nasłuchuje domyślnie wyłącznie na 127.0.0.1:8788. Nie wystawiać go do LAN bez dodatkowej warstwy TLS i przeglądu konfiguracji sieciowej. Implementacja jest synchroniczna i obsługuje jedno połączenie naraz — nie jest jeszcze gotowa do wdrożenia produkcyjnego.
 
 Serwer dodatkowo waliduje URL po stronie Raspberry Pi: wymaga HTTPS, dokładnego hosta z allowlisty, odrzuca userinfo i fragmenty oraz sprawdza identyfikatory filmu/playlisty i dozwolone ścieżki. Nie ufa walidacji wykonanej wyłącznie przez klienta Android.
+
+The server requires a 43–128 character base64url bearer token (minimum 256-bit entropy) and compares credentials over a fixed 128-byte loop. Generate tokens from a cryptographically secure random source; do not use human passwords.
