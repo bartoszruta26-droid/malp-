@@ -83,3 +83,10 @@ The listener uses asynchronous accept and handles SIGINT/SIGTERM through Boost.A
 A C++17 `YtDlpResolver` component now launches the absolute yt-dlp executable with `posix_spawn` and an argv vector; it never invokes a shell. Metadata mode uses `--skip-download`, `--flat-playlist`, `--playlist-end` (hard-capped at 200), `--dump-single-json`, `--ignore-config` and `--no-cache-dir`. Direct audio URL mode uses `--get-url` and `--skip-download`, then accepts only HTTPS URLs within the `googlevideo.com` host boundary. Both modes have process timeouts, process-group termination, bounded stdout/stderr and non-sensitive error codes; signed URLs and stderr are not logged.
 
 The resolver is a tested library component, not yet connected to `POST /api/v1/queue` or the session registry. The queue endpoint must continue returning 503 until resolver/session lifecycle and MPD queue management are integrated. Unit tests use temporary fixture executables and do not contact YouTube or download media.
+
+
+## Resolver cancellation and argument-policy checks
+
+The resolver now accepts an optional caller-owned `std::atomic_bool` cancellation flag for metadata and direct-URL resolution. When set, the resolver terminates the complete yt-dlp process group, reaps the child and returns the non-sensitive `process_cancelled` code for metadata requests. The flag must remain alive for the duration of the synchronous call. Existing timeout and bounded-output protections remain in force. Unit fixtures also assert that both resolver modes pass `--ignore-config`, `--no-cache-dir` and `--skip-download`, and that URL mode passes `--get-url`.
+
+This is a library-level cancellation primitive only: the HTTP request lifecycle does not yet own or propagate cancellation to resolver calls. Queue API remains fail-closed with HTTP 503.
