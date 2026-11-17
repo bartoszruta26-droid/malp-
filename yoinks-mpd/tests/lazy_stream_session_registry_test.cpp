@@ -793,23 +793,57 @@ void testSessionAndBufferLimitsAreValidated() {
 
 int main() {
     try {
+        std::cerr << "[ RUN      ] testRegistrationDoesNotResolveOrStartMedia" << std::endl;
         testRegistrationDoesNotResolveOrStartMedia();
+        std::cerr << "[       OK ] testRegistrationDoesNotResolveOrStartMedia" << std::endl;
+        std::cerr << "[ RUN      ] testInvalidVideoIdsAreRejected" << std::endl;
         testInvalidVideoIdsAreRejected();
+        std::cerr << "[       OK ] testInvalidVideoIdsAreRejected" << std::endl;
+        std::cerr << "[ RUN      ] testActivationResolvesOnlyOnDemandAndRejectsUntrustedUrl" << std::endl;
         testActivationResolvesOnlyOnDemandAndRejectsUntrustedUrl();
+        std::cerr << "[       OK ] testActivationResolvesOnlyOnDemandAndRejectsUntrustedUrl" << std::endl;
+        std::cerr << "[ RUN      ] testConcurrentActivationIsSingleFlight" << std::endl;
         testConcurrentActivationIsSingleFlight();
+        std::cerr << "[       OK ] testConcurrentActivationIsSingleFlight" << std::endl;
+        std::cerr << "[ RUN      ] testEraseCancelsResolverInFlight" << std::endl;
         testEraseCancelsResolverInFlight();
+        std::cerr << "[       OK ] testEraseCancelsResolverInFlight" << std::endl;
+        std::cerr << "[ RUN      ] testReleaseCancelsInFlightActivationAndAllowsFreshRetry" << std::endl;
         testReleaseCancelsInFlightActivationAndAllowsFreshRetry();
+        std::cerr << "[       OK ] testReleaseCancelsInFlightActivationAndAllowsFreshRetry" << std::endl;
+        std::cerr << "[ RUN      ] testReleaseDuringStartedButUnpublishedStreamFreesReservation" << std::endl;
         testReleaseDuringStartedButUnpublishedStreamFreesReservation();
+        std::cerr << "[       OK ] testReleaseDuringStartedButUnpublishedStreamFreesReservation" << std::endl;
+        std::cerr << "[ RUN      ] testEraseDuringStartedButUnpublishedStreamDoesNotRecreateSession" << std::endl;
         testEraseDuringStartedButUnpublishedStreamDoesNotRecreateSession();
+        std::cerr << "[       OK ] testEraseDuringStartedButUnpublishedStreamDoesNotRecreateSession" << std::endl;
+        std::cerr << "[ RUN      ] testClearDuringStartedButUnpublishedStreamDoesNotRecreateSession" << std::endl;
         testClearDuringStartedButUnpublishedStreamDoesNotRecreateSession();
+        std::cerr << "[       OK ] testClearDuringStartedButUnpublishedStreamDoesNotRecreateSession" << std::endl;
+        std::cerr << "[ RUN      ] testShutdownWaitsForUnpublishedActivationBeforeDestruction" << std::endl;
         testShutdownWaitsForUnpublishedActivationBeforeDestruction();
+        std::cerr << "[       OK ] testShutdownWaitsForUnpublishedActivationBeforeDestruction" << std::endl;
+        std::cerr << "[ RUN      ] testShutdownSerializesWithConcurrentRegistryMutations" << std::endl;
         testShutdownSerializesWithConcurrentRegistryMutations();
+        std::cerr << "[       OK ] testShutdownSerializesWithConcurrentRegistryMutations" << std::endl;
+        std::cerr << "[ RUN      ] testConcurrentLifecycleStressMaintainsRegistryAccounting" << std::endl;
         testConcurrentLifecycleStressMaintainsRegistryAccounting();
+        std::cerr << "[       OK ] testConcurrentLifecycleStressMaintainsRegistryAccounting" << std::endl;
+        std::cerr << "[ RUN      ] testRetainOnlyPreservesUnpublishedActivationAndSlotAccounting" << std::endl;
         testRetainOnlyPreservesUnpublishedActivationAndSlotAccounting();
+        std::cerr << "[       OK ] testRetainOnlyPreservesUnpublishedActivationAndSlotAccounting" << std::endl;
+        std::cerr << "[ RUN      ] testRetainOnlyPreservesInFlightActivation" << std::endl;
         testRetainOnlyPreservesInFlightActivation();
+        std::cerr << "[       OK ] testRetainOnlyPreservesInFlightActivation" << std::endl;
+        std::cerr << "[ RUN      ] testReleaseRetainsQueuedCapabilityForReplay" << std::endl;
         testReleaseRetainsQueuedCapabilityForReplay();
+        std::cerr << "[       OK ] testReleaseRetainsQueuedCapabilityForReplay" << std::endl;
+        std::cerr << "[ RUN      ] testRetainOnlyPrunesSessionsRemovedFromMpdQueue" << std::endl;
         testRetainOnlyPrunesSessionsRemovedFromMpdQueue();
+        std::cerr << "[       OK ] testRetainOnlyPrunesSessionsRemovedFromMpdQueue" << std::endl;
+        std::cerr << "[ RUN      ] testSessionAndBufferLimitsAreValidated" << std::endl;
         testSessionAndBufferLimitsAreValidated();
+        std::cerr << "[       OK ] testSessionAndBufferLimitsAreValidated" << std::endl;
         std::cout << "All lazy stream session tests passed\n";
         return 0;
     } catch (const std::exception& error) {
