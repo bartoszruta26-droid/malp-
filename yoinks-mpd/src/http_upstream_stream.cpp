@@ -164,43 +164,6 @@ int HttpUpstreamStream::progressCallback(void* context, long, long, long, long) 
 }
 
 void HttpUpstreamStream::run(std::string url) {
-    if (config_.transport_override_for_tests) {
-        const auto sink = [this](const std::uint8_t* data, const std::size_t length) {
-            if (cancelled_.load()) return false;
-            const std::uint64_t received = bytes_received_.load();
-            if (length > config_.maximum_bytes
-                    || received > config_.maximum_bytes - length) {
-                std::lock_guard<std::mutex> lock(error_mutex_);
-                error_code_ = "stream_size_limit";
-                return false;
-            }
-            if (!buffer_.write(data, length)) return false;
-            bytes_received_.fetch_add(length);
-            return true;
-        };
-        bool success = false;
-        try {
-            success = config_.transport_override_for_tests(url, sink, &cancelled_);
-        } catch (...) {
-            success = false;
-        }
-        if (cancelled_.load()) {
-            state_.store(UpstreamState::cancelled);
-            buffer_.cancel();
-        } else if (success) {
-            state_.store(UpstreamState::completed);
-            buffer_.close();
-        } else {
-            {
-                std::lock_guard<std::mutex> lock(error_mutex_);
-                if (error_code_.empty()) error_code_ = "upstream_transport_failed";
-            }
-            state_.store(UpstreamState::failed);
-            buffer_.cancel();
-        }
-        return;
-    }
-
     CURL* curl = curl_easy_init();
     if (curl == nullptr) {
         {
@@ -213,6 +176,26 @@ void HttpUpstreamStream::run(std::string url) {
     }
 
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    if (!config_.test_ca_bundle_path_for_tests.empty()) {
+        curl_easy_setopt(curl, CURLOPT_CAINFO,
+                         config_.test_ca_bundle_path_for_tests.c_str());
+    }
+    curl_slist* connect_to = nullptr;
+    if (!config_.test_connect_to_for_tests.empty()) {
+        connect_to = curl_slist_append(nullptr,
+                config_.test_connect_to_for_tests.c_str());
+        if (connect_to == nullptr) {
+            curl_easy_cleanup(curl);
+            {
+                std::lock_guard<std::mutex> lock(error_mutex_);
+                error_code_ = "curl_connect_override_failed";
+            }
+            state_.store(UpstreamState::failed);
+            buffer_.cancel();
+            return;
+        }
+        curl_easy_setopt(curl, CURLOPT_CONNECT_TO, connect_to);
+    }
 #if LIBCURL_VERSION_NUM >= 0x075500
     curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, "https");
     curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS_STR, "https");
@@ -241,6 +224,7 @@ void HttpUpstreamStream::run(std::string url) {
     long response_code = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
     curl_easy_cleanup(curl);
+    if (connect_to != nullptr) curl_slist_free_all(connect_to);
 
     if (cancelled_.load()) {
         state_.store(UpstreamState::cancelled);
