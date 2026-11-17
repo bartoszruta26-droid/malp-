@@ -168,3 +168,16 @@ Niniejsza sekcja jest nadrzędna wobec wcześniejszych fragmentów tego dokument
 
 
 **Potwierdzenie CI po mapowaniu kodów HTTP:** run `44060955448` zakończył się `success` — konfiguracja, kompilacja, wszystkie 9 testów CTest oraz test HTTP z atrapą resolvera i niedostępnym MPD. Run `44061104082` dla dokumentacji i aktualnego drzewa również zakończył się `success`. Ostatni potwierdzony przebieg kodu obejmuje semantykę `play_now`, statusy HTTP, klienta API i poprawki cyklu życia sesji. Nie obejmuje testu na Raspberry Pi ani rzeczywistego odtwarzania.
+
+
+### Reconciliation kolejki, ponowne odtwarzanie i RAM — aktualizacja 2026-11-17
+
+- Przy każdym nowym żądaniu kolejki usługa odczytuje MPD przez read-only `playlistinfo`, wyodrębnia wyłącznie identyfikatory własnych URI proxy i usuwa nieaktywne sesje, których nie ma już w kolejce MPD.
+- Aktywne lub właśnie obsługiwane strumienie są chronione przed sprzątaniem, także gdy MPD usuwa pozycję podczas odtwarzania.
+- Operacje `resolve → snapshot MPD → create sessions → addid/playid` są serializowane mutexem usługi. Zapobiega to sytuacji, w której równoległe żądanie usuwa sesje utworzone przez inne, jeszcze niewstawione do MPD.
+- Po zakończeniu strumienia usługa zachowuje lekką capability (YouTube video ID), ale zwalnia obiekt strumienia i bufor audio RAM. Przy ponownym GET dla tego samego URI resolver odświeża adres CDN i tworzy nowy bufor. Po przerwaniu połączenia upstream jest anulowany i następne żądanie wymusza ponowne rozwiązanie adresu.
+- Limit dwóch równoległych sesji uwzględnia również przypadek, w którym upstream zakończył pobieranie, ale klient nadal odbiera dane z bufora. Bufory zakończonych/przerwanych strumieni są zwalniane po zwolnieniu czytelnika.
+- Limit czasu: yt-dlp metadata do 30 s; każdy z dwóch etapów MPD (snapshot i enqueue) do 15 s. Łączny budżet nominalny wynosi maksymalnie 60 s, aby zmieścić się w 65-sekundowym limicie odczytu klienta Androida.
+- Testy obejmują odczyt playlisty MPD, filtrowanie lokalnych URI, usuwanie nieaktualnych capability, zachowanie sesji aktywnych, fail-closed przy błędzie snapshotu i ponowienie nieudanej aktywacji.
+- Potwierdzony przebieg CI przed ostatnimi zmianami limitu aktywnych czytelników i limitów czasu: run `44062367873` — build i CTest `success`. Przebiegi dla kolejnych zmian należy sprawdzić po ich zakończeniu.
+- Sesje usunięte z MPD są sprzątane przy kolejnym żądaniu kolejki; nie ma jeszcze osobnego demona monitorującego zmiany MPD. Pełna weryfikacja replay/reconnect na rzeczywistym MPD/CURL pozostaje wymagana.
