@@ -116,3 +116,5 @@ Klient Android wysyła POST /api/v1/queue i nie otrzymuje stream_url ani lokalny
 Dodano wstępny serwer HTTP C++ oparty na Boost.Beast i nlohmann-json. Implementuje GET /api/v1/health, uwierzytelnianie Bearer z porównaniem stałoczasowym, limit body 16 KiB, limit nagłówków 8 KiB oraz timeout odczytu/zapisu. POST /api/v1/queue poprawnie waliduje kształt JSON i tryb, ale zwraca 503 backend_not_ready, dopóki nie zostaną zintegrowane resolver, proxy i manager MPD. Jest to zachowanie fail-closed; endpoint nie udaje, że dodał pozycję.
 
 Serwer nasłuchuje domyślnie wyłącznie na 127.0.0.1:8788. Nie wystawiać go do LAN bez dodatkowej warstwy TLS i przeglądu konfiguracji sieciowej. Implementacja jest synchroniczna i obsługuje jedno połączenie naraz — nie jest jeszcze gotowa do wdrożenia produkcyjnego.
+
+Serwer dodatkowo waliduje URL po stronie Raspberry Pi: wymaga HTTPS, dokładnego hosta z allowlisty, odrzuca userinfo i fragmenty oraz sprawdza identyfikatory filmu/playlisty i dozwolone ścieżki. Nie ufa walidacji wykonanej wyłącznie przez klienta Android.
