@@ -5,6 +5,8 @@ on:
     paths:
       - "yoinks-mpd/**"
       - "scripts/yoinks-mpd/install.sh"
+      - "scripts/yoinks-mpd/yoinks-mpd.service"
+      - "scripts/yoinks-mpd/diagnose-mpd-http.sh"
       - ".github/workflows/yoinks-mpd-core.yml"
   pull_request:
     paths:
@@ -25,7 +27,10 @@ jobs:
       - name: Verify installer shell syntax
         run: |
           bash -n scripts/yoinks-mpd/install.sh
+          bash -n scripts/yoinks-mpd/diagnose-mpd-http.sh
           bash -n yoinks-mpd/tests/http_api_test.sh
+          scripts/yoinks-mpd/install.sh --help
+          systemd-analyze verify scripts/yoinks-mpd/yoinks-mpd.service
       - name: Configure
         run: cmake -S yoinks-mpd -B yoinks-mpd/build -DCMAKE_BUILD_TYPE=Release
       - name: Build
