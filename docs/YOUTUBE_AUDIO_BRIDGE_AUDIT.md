@@ -206,3 +206,6 @@ All six reported cases passed: binary FIFO transfer and cleanup; playlist reject
 - Added `testConcurrentLifecycleStressMaintainsRegistryAccounting()` in commit `a2a5b046a550a6ae9fbbe9b56841188c7befb8dc`.
 - Four concurrent workers exercise 16 retained capabilities: repeated failed lazy activation attempts, `release(id, true)`, `retainOnly()` reconciliation, and concurrent read/accounting calls. The workload is bounded (80 activation/release rounds per capability, 160 reconciliations, 500 observation rounds); after joining all workers it checks retained-session and active-slot accounting, then clears and shuts down the registry.
 - GitHub Actions run `44123745133` is validating this exact test commit with both the normal and sanitizer build workflow. Its result is pending; do not treat the stress or sanitizer gate as passed until completion.
+
+
+- Follow-up test hardening: commit `c063439c` counts each activation attempt before calling `activate()`, rather than requiring the resolver to win a scheduling race. This makes the bounded workload-completion assertion deterministic under different thread schedules. CI for this corrected head is pending.
