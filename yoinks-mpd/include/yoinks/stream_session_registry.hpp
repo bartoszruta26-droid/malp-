@@ -29,6 +29,7 @@ struct StreamSessionRegistryConfig {
 class StreamSessionRegistry final {
 public:
     explicit StreamSessionRegistry(StreamSessionRegistryConfig config = {});
+    ~StreamSessionRegistry();
 
     StreamSessionRegistry(const StreamSessionRegistry&) = delete;
     StreamSessionRegistry& operator=(const StreamSessionRegistry&) = delete;
