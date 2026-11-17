@@ -1,0 +1,75 @@
+# Instalacja Yoinks-MPD na Raspberry Pi
+
+## Wymagania
+
+- Raspberry Pi OS / Debian z aktywnym systemd i APT.
+- Architektura ARM64 (`aarch64`) albo ARMv7 (`armv7l`). Instalator obsługuje również `x86_64` do testów.
+- Dostęp do Internetu podczas instalacji.
+- Checkout repozytorium na gałęzi `feature/youtube-audio-bridge`.
+
+## Instalacja
+
+Z katalogu głównego repozytorium:
+
+```bash
+sudo bash scripts/yoinks-mpd/install.sh
+```
+
+Instalator:
+
+1. Instaluje pakiety wymagane do kompilacji.
+2. Buduje usługę C++ w trybie Release z włączonymi testami.
+3. Uruchamia pełny CTest; przy niepowodzeniu przerywa instalację.
+4. Pobiera oficjalny plik wykonywalny yt-dlp i weryfikuje jego SHA-256 względem upstreamowego `SHA2-256SUMS`.
+5. Tworzy nieuprzywilejowane konto systemowe `yoinks-mpd`.
+6. Generuje token API o wysokiej entropii, jeśli plik konfiguracji jeszcze nie istnieje.
+7. Instaluje binaria i ograniczoną jednostkę `systemd`.
+8. Włącza usługę i domyślnie ją uruchamia.
+
+Opcje:
+
+- `--no-start` — instaluje i włącza jednostkę, ale nie uruchamia jej w tej operacji.
+- `--check-youtube` — wykonuje dodatkowy test pobrania samych metadanych jednego filmu; nie pobiera audio.
+- `--help` — wyświetla pomoc.
+
+## Token API
+
+Token jest przechowywany w:
+
+`/etc/yoinks-mpd/yoinks-mpd.env`
+
+Plik ma uprawnienia `0600` i właściciela `root:root`. Odczyt:
+
+```bash
+sudo cat /etc/yoinks-mpd/yoinks-mpd.env
+```
+
+Wprowadź wartość `YOINKS_MPD_TOKEN` do konfiguracji klienta MALP. Nie publikuj tokenu, nie umieszczaj go w zgłoszeniach ani logach. Ponowna instalacja zachowuje istniejący poprawny token.
+
+## Kontrola usługi
+
+```bash
+systemctl status yoinks-mpd.service
+journalctl -u yoinks-mpd.service -n 100 --no-pager
+curl -fsS http://127.0.0.1:8788/api/v1/health
+```
+
+Domyślne parametry:
+
+- API: `127.0.0.1:8788`
+- MPD: `127.0.0.1:6600`
+- yt-dlp: `/usr/local/bin/yt-dlp`
+
+Jednostka systemd uruchamia proces jako użytkownik `yoinks-mpd`, bez uprawnień roota. Ogranicza pamięć do 256 MiB, liczbę zadań do 32, dostęp do systemu plików i rodziny gniazd. Logi trafiają do journald.
+
+## Ważne ograniczenia
+
+- Instalator **nie instaluje, nie konfiguruje, nie restartuje ani nie wysyła poleceń do MPD**.
+- Nie czyści ani nie modyfikuje istniejącej kolejki MPD. Aplikacja używa protokołu MPD wyłącznie do operacji kolejki wynikających z żądania użytkownika.
+- Nie konfiguruje TLS ani dostępu z sieci. Serwer API pozostaje związany z loopback. Zdalny dostęp wymaga osobno skonfigurowanego i przetestowanego TLS reverse proxy.
+- Nie potwierdza, że konkretna kompilacja MPD obsługuje wymagane zachowanie HTTP/CURL. Nie potwierdza też rzeczywistego odtwarzania.
+- Endpoint strumienia nie obsługuje obecnie HEAD ani Range. Zgodność z konkretnym MPD należy zweryfikować w odizolowanym teście.
+- Audio jest przesyłane przez HTTP proxy i przechowywane wyłącznie w ograniczonych buforach RAM. Nie używa FIFO, potoków nazwanych, plików audio ani plikowego cache.
+- Zewnętrzny klient Android nie połączy się bezpośrednio z adresem loopback Raspberry Pi. Do dostępu zdalnego potrzebny jest odrębny, zabezpieczony kanał TLS.
+
+Instalacja usługi nie oznacza gotowości produkcyjnej. Przed użyciem zdalnym należy przeprowadzić test MPD/CURL na docelowym urządzeniu, test TLS oraz test odtwarzania end-to-end.
