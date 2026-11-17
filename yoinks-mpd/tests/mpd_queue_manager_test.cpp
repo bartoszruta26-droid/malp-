@@ -86,6 +86,10 @@ private:
                         : "OK\n");
                 } else if (line.rfind("deleteid ", 0) == 0) {
                     send(socket, "OK\n");
+                } else if (line == "playlistinfo") {
+                    send(socket,
+                        "file: http://127.0.0.1:8788/stream/0123456789abcdef0123456789abcdef\n"
+                        "Pos: 0\nId: 700\nOK\n");
                 } else {
                     send(socket, "ACK [5@0] {unknown} unsupported test command\n");
                 }
@@ -200,6 +204,19 @@ void testLostPlayReplyDoesNotDeletePossiblyCurrentSong() {
     require(mock.commands().size() == 2 && mock.commands()[1] == "playid 700",
             "ambiguous playid must not be followed by deleteid");
 }
+void testPlaylistSnapshotReturnsOnlyTrustedProxySessions() {
+    MockMpd mock;
+    auto manager = managerFor(mock);
+    const auto snapshot = manager.listStreamSessionIds();
+    mock.join();
+    require(snapshot.success && snapshot.stream_session_ids.size() == 1,
+            "playlist snapshot should find the active proxy session");
+    require(snapshot.stream_session_ids.front() == "0123456789abcdef0123456789abcdef",
+            "playlist snapshot should return only the opaque local session ID");
+    require(mock.commands().size() == 1 && mock.commands()[0] == "playlistinfo",
+            "session reconciliation must use a read-only MPD command");
+}
+
 void testInvalidProxyUriIsRejectedBeforeConnecting() {
     yoinks::MpdQueueManagerConfig config;
     config.port = 1;
@@ -222,6 +239,7 @@ int main() {
         testPlayNowRejectionRollsBackNewEntries();
         testLostAddReplyIsReportedAsAmbiguousWithoutUnsafeRollback();
         testLostPlayReplyDoesNotDeletePossiblyCurrentSong();
+        testPlaylistSnapshotReturnsOnlyTrustedProxySessions();
         testInvalidProxyUriIsRejectedBeforeConnecting();
         std::cout << "All MPD queue manager tests passed\n";
         return 0;
