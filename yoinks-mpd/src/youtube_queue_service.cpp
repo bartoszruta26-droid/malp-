@@ -5,6 +5,7 @@
 #include "yoinks/youtube_queue_service.hpp"
 
 #include <stdexcept>
+#include <unordered_set>
 #include <utility>
 
 namespace yoinks {
@@ -36,6 +37,18 @@ YoutubeQueueServiceResult YoutubeQueueService::enqueue(
     if (metadata.entries.empty() || metadata.entries.size() > config_.maximum_entries) {
         result.error_code = "invalid_entry_count";
         return result;
+    }
+
+    if (config_.queued_session_ids) {
+        std::vector<std::string> queued_ids;
+        bool snapshot_ok = false;
+        try { snapshot_ok = config_.queued_session_ids(queued_ids); } catch (...) { snapshot_ok = false; }
+        if (!snapshot_ok) {
+            result.error_code = "mpd_reconcile_failed";
+            return result;
+        }
+        const std::unordered_set<std::string> live_ids(queued_ids.begin(), queued_ids.end());
+        config_.sessions->retainOnly(live_ids);
     }
 
     std::vector<std::string> session_ids;
