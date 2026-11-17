@@ -7,6 +7,7 @@
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <mutex>
 #include <vector>
 
@@ -23,7 +24,8 @@ namespace yoinks {
  */
 class BoundedStreamBuffer final {
 public:
-    explicit BoundedStreamBuffer(std::size_t capacity);
+    explicit BoundedStreamBuffer(std::size_t capacity,
+                                std::function<void()> before_writer_wait_for_tests = {});
     BoundedStreamBuffer(const BoundedStreamBuffer&) = delete;
     BoundedStreamBuffer& operator=(const BoundedStreamBuffer&) = delete;
 
@@ -45,6 +47,7 @@ public:
 
 private:
     const std::size_t capacity_;
+    std::function<void()> before_writer_wait_for_tests_;
     std::vector<std::uint8_t> storage_;
     mutable std::mutex mutex_;
     std::condition_variable readable_;
