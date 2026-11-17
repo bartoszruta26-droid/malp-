@@ -9,15 +9,15 @@ Finish the existing `feature/youtube-audio-bridge` implementation so MALP can sh
 ## Current audited state
 
 - The feature branch contains a YouTube URL parser, bridge preferences, and an Android HTTP client.
-- It contains a Bash single-video yt-dlp-to-FIFO producer, an APT installer, Raspberry Pi installation instructions, an offline FIFO producer test, and this integration design.
-- The documented FIFO producer test has six cases and the audit records that the user reported running them successfully on the Pi. This report is not an independent reproduction and does not establish MPD FIFO-input compatibility.
+- It previously contained a named-pipe producer prototype and its tests; these have now been removed. The remaining installer provisions yt-dlp only, while the HTTP proxy service is still to be implemented.
+- No named-pipe transport or producer test is part of the accepted design. The required media transport is HTTP proxy only.
 - `MainActivity.java` currently contains literal backslash-n sequences in its import list and calls `handleIncomingShare(getIntent())`, but no implementation of that method was found in the file. The Android share path is therefore incomplete and must not be presented as working.
-- The Android HTTP client expects `POST /api/v1/resolve`, but the Raspberry Pi installation currently installs only the FIFO producer script. No matching HTTP API service is present.
+- The Android HTTP client expects `POST /api/v1/resolve`, but no matching Raspberry Pi HTTP API/proxy service is implemented yet.
 - Playlist expansion, authenticated request handling, MPD queue insertion, cancellation coordination, and successful end-to-end playback remain unimplemented/unverified.
 
 ## MPD CURL compatibility gate
 
-The selected target architecture is a local C++ HTTP relay consumed by MPD's CURL input plugin. MPD's documented pipe and fifo plugins are output plugins, not generic input sources; the existing FIFO producer is retained only as a prototype. Before implementing the relay, verify the exact MPD build on the target Raspberry Pi and demonstrate playback of a known-good HTTP audio URI without changing the production queue. Use scripts/yoinks-mpd/diagnose-mpd-http.sh and docs/yoinks-mpd/MPD_HTTP_INPUT_DIAGNOSTIC.md. If CURL input is absent, stop and decide explicitly whether to rebuild MPD with CURL support or implement a native C++ input plugin.
+The sole target architecture is a local C++ HTTP proxy consumed by MPD's CURL input plugin. Named pipes and local media files are excluded from the design. Before implementing the relay, verify the exact MPD build on the target Raspberry Pi and demonstrate playback of a known-good HTTP audio URI without changing the production queue. Use scripts/yoinks-mpd/diagnose-mpd-http.sh and docs/yoinks-mpd/MPD_HTTP_INPUT_DIAGNOSTIC.md. If CURL input is absent, stop and decide explicitly whether to rebuild MPD with CURL support or implement a native C++ HTTP input module. Do not substitute named pipes.
 
 ## Requirements for the implementation
 
