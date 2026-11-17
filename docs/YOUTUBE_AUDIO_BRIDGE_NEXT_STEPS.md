@@ -308,3 +308,12 @@ Nie publikować APK jako „gotowego do instalacji” na podstawie samego CI. Wy
 - CI run 44089142175 built this fixture and reported http_stream_byte_integration PASS. The other HTTP playlist integration test failed at that revision because its playlist-count assertion was malformed; this is a test assertion failure, not a C++ build failure.
 - The playlist assertion and resolver-fixture argument parsing were corrected in subsequent commits. The latest workflow run for the corrected revision must pass before the whole C++ suite is marked green.
 - The byte fixture validates the local producer → bounded RAM buffer → HTTP chunked response path. It does not prove a real libcurl TLS session to YouTube/googlevideo or playback by MPD on the Raspberry Pi. Those remain separate acceptance gates.
+
+
+### Final C++ CI verification for the current test set — 2026-11-17
+
+- Corrected the HTTP playlist test's shell quoting/count assertion and added failure diagnostics. The test now verifies three unique MPD proxy URIs and resolves their three video IDs in playlist order.
+- CI run 44089667826 completed successfully for commit efeaa1335a1ec7dca590a6d755cecedef4fed62e: installer/shell checks, CMake configure, C++ build, and all 10/10 CTest cases passed.
+- The 10 tests include both `http_api_integration` (HTTP metadata/playlist → yt-dlp fixture → lazy proxy sessions → MPD mock) and `http_stream_byte_integration` (HTTP queue → MPD mock → lazy resolver → bounded RAM buffer → HTTP chunked stream, with exact payload comparison).
+- The byte-stream test uses an explicit test-only transport override. Production leaves it unset and uses libcurl. Therefore the successful CI result proves the C++ proxy and chunked HTTP data path with deterministic fixture bytes, not a real TLS connection to Google's CDN.
+- Still outstanding: successful real libcurl/TLS retrieval from a valid googlevideo URL, target Raspberry Pi MPD CURL-input compatibility, and audible playback verification. No production MPD configuration or queue has been changed.
