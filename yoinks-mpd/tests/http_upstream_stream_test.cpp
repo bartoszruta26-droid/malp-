@@ -15,33 +15,47 @@ void require(bool condition, const std::string& message) {
     if (!condition) throw std::runtime_error(message);
 }
 
-void testRejectsNonHttpsAndUserInfo() {
-    yoinks::HttpUpstreamStream stream;
-    require(!stream.start("http://example.com/audio"), "plain HTTP must be rejected");
-    require(stream.state() == yoinks::UpstreamState::failed,
-            "invalid URL must fail before network activity");
-    require(stream.error_code() == "invalid_upstream_url",
-            "invalid URL must use a non-sensitive error code");
-
-    yoinks::HttpUpstreamStream credentials;
-    require(!credentials.start("https://user:password@example.com/audio"),
+void testStrictHttpsCdnAllowlist() {
+    require(yoinks::HttpUpstreamStream::isAllowedResolvedUrl(
+                    "https://r1---sn.googlevideo.com/videoplayback?expire=123"),
+            "Google video CDN HTTPS URL should be accepted");
+    require(!yoinks::HttpUpstreamStream::isAllowedResolvedUrl(
+                    "http://r1---sn.googlevideo.com/videoplayback"),
+            "plain HTTP must be rejected");
+    require(!yoinks::HttpUpstreamStream::isAllowedResolvedUrl(
+                    "https://googlevideo.com.evil.example/videoplayback"),
+            "lookalike CDN domain must be rejected");
+    require(!yoinks::HttpUpstreamStream::isAllowedResolvedUrl(
+                    "https://example.com/audio"),
+            "arbitrary HTTPS host must be rejected");
+    require(!yoinks::HttpUpstreamStream::isAllowedResolvedUrl(
+                    "https://r1---sn.googlevideo.com:8443/videoplayback"),
+            "non-standard HTTPS port must be rejected");
+    require(!yoinks::HttpUpstreamStream::isAllowedResolvedUrl(
+                    "https://user:password@r1---sn.googlevideo.com/videoplayback"),
             "URL userinfo must be rejected");
-    require(credentials.bytes_received() == 0,
-            "invalid URL must not transfer any bytes");
 }
 
-void testRejectsSecondStartAfterFailure() {
+void testInvalidStartFailsClosedAndCannotRestart() {
     yoinks::HttpUpstreamStream stream;
-    require(!stream.start("http://example.com/audio"), "invalid URL should fail");
-    require(!stream.start("https://example.com/audio"),
-            "a stream instance must not be restarted after terminal failure");
+    require(!stream.start("http://example.com/audio"),
+            "invalid URL must fail before network activity");
+    require(stream.state() == yoinks::UpstreamState::failed,
+            "invalid URL must move stream into failed state");
+    require(stream.error_code() == "invalid_upstream_url",
+            "invalid URL must use a non-sensitive error code");
+    require(!stream.start("https://r1---sn.googlevideo.com/videoplayback"),
+            "a terminal stream instance must not be restarted");
+    require(stream.bytes_received() == 0,
+            "invalid URL must not transfer any bytes");
 }
 
 }  // namespace
 
 int main() {
     try {
-        testRejectsNonHttpsAndUserInfo();
+        testStrictHttpsCdnAllowlist();
+        testInvalidStartFailsClosedAndCannotRestart();
         std::cout << "All HTTP upstream validation tests passed\n";
         return 0;
     } catch (const std::exception& error) {
