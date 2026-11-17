@@ -16,6 +16,7 @@ add_library(yoinks_mpd_core
     src/http_upstream_stream.cpp
     src/stream_session_registry.cpp
     src/yt_dlp_resolver.cpp
+    src/yt_dlp_resolver.cpp
 )
 target_include_directories(yoinks_mpd_core PUBLIC include ${Boost_INCLUDE_DIRS})
 target_compile_definitions(yoinks_mpd_core PUBLIC BOOST_ERROR_CODE_HEADER_ONLY)
@@ -61,6 +62,12 @@ if(YOINKS_MPD_BUILD_TESTS)
         $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic;-Werror>
     )
     add_test(NAME chunked_stream_writer COMMAND yoinks_mpd_chunked_stream_tests)
+    add_executable(yoinks_mpd_ytdlp_resolver_tests tests/yt_dlp_resolver_test.cpp)
+    target_link_libraries(yoinks_mpd_ytdlp_resolver_tests PRIVATE yoinks_mpd_core)
+    target_compile_options(yoinks_mpd_ytdlp_resolver_tests PRIVATE
+        $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic;-Werror>
+    )
+    add_test(NAME yt_dlp_resolver COMMAND yoinks_mpd_ytdlp_resolver_tests)
     add_test(NAME http_api_integration
         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/http_api_test.sh $<TARGET_FILE:yoinks-mpd>)
 endif()
