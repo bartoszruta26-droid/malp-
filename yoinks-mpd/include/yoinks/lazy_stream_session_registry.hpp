@@ -54,6 +54,7 @@ private:
         bool activating{false};
         bool failed{false};
         bool serving{false};
+        bool refresh_required{false};
         std::shared_ptr<std::atomic_bool> cancellation;
     };
     static std::string generateId();
