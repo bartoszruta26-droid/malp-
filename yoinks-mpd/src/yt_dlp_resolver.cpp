@@ -52,6 +52,15 @@ bool setNonBlocking(int fd) {
     return flags >= 0 && fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
 }
 
+bool moveFdAboveStandardStreams(int& fd) {
+    if (fd >= 3) return true;
+    const int moved = fcntl(fd, F_DUPFD_CLOEXEC, 3);
+    if (moved < 0) return false;
+    close(fd);
+    fd = moved;
+    return true;
+}
+
 void closeFd(int& fd) {
     if (fd >= 0) {
         close(fd);
@@ -86,8 +95,8 @@ ProcessResult runBoundedProcess(const std::string& executable,
         return result;
     }
 
-    for (const int fd : {stdout_pipe[0], stdout_pipe[1], stderr_pipe[0], stderr_pipe[1]}) {
-        if (!setCloseOnExec(fd)) {
+    for (int* fd : {&stdout_pipe[0], &stdout_pipe[1], &stderr_pipe[0], &stderr_pipe[1]}) {
+        if (!moveFdAboveStandardStreams(*fd) || !setCloseOnExec(*fd)) {
             closeFd(stdout_pipe[0]); closeFd(stdout_pipe[1]);
             closeFd(stderr_pipe[0]); closeFd(stderr_pipe[1]);
             result.error_code = "pipe_configuration_failed";
