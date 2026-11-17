@@ -232,3 +232,13 @@ All six reported cases passed: binary FIFO transfer and cleanup; playlist reject
 
 
 - Follow-up diagnostic commit `7695163c` adds phase markers around each shutdown/mutation race (`release`, `erase`, `clear`, `retainOnly`), including racer release, mutation/shutdown entry, create-gate check, and worker joins. This will localize whether the sanitizer hang is in the synchronization barrier, the 100,000-iteration create probe, or thread joining. No production implementation was changed in this diagnostic step.
+
+
+## Sanitizer race-test correction — deterministic shutdown gate (2026-11-17)
+
+- The CI run for `f44a56ee` confirms the normal suite passes, while the ASan/UBSan CTest suite times out in `lazy_stream_session_registry` at `testShutdownSerializesWithConcurrentRegistryMutations()`.
+- The prior test's `shutdown_started` flag was set immediately before calling `shutdown()`; it did not prove that the registry had acquired its mutex and set `shutting_down_`. Its 100,000-iteration `create()/erase()` probe could contend with shutdown and made the test timing-dependent.
+- Replaced that inference with a test-only callback fired immediately after the shutdown admission gate is set under the registry mutex. The callback only signals the test condition variable and does not re-enter the registry.
+- The test now waits for both the selected mutation to finish and the actual shutdown gate signal, releases the paused activation, joins all workers, and verifies that a post-shutdown `create()` is rejected and the registry is empty.
+- This change removes the busy create/erase polling loop; it does not weaken the shutdown/mutation race cases or change production behavior when the test callback is unset.
+- CI and Raspberry Pi validation are pending. The DNS/IP SSRF finding remains deferred at the user's request.
