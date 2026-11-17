@@ -24,7 +24,7 @@ ctest --test-dir yoinks-mpd/build --output-on-failure
 
 ## Not implemented yet
 
-- HTTP listener and HTTP client/upstream relay.
+- Bounded HTTPS upstream producer to RAM (implemented; local MPD-facing HTTP streaming endpoint and session registry pending).
 - Control API routing and Bearer token verification.
 - yt-dlp resolver and playlist expansion.
 - MPD protocol queue manager.
@@ -37,7 +37,7 @@ Do not expose this core as a working bridge until these components and integrati
 
 ## HTTP API bootstrap status
 
-A minimal Boost.Beast HTTP server is now built as `yoinks-mpd`. It exposes an unauthenticated health endpoint and a Bearer-protected queue endpoint that intentionally returns HTTP 503 until the resolver, HTTP media relay and MPD queue manager are integrated. The server enforces a 16 KiB request-body limit, an 8 KiB header limit and socket read/write deadlines. It binds to loopback by default. This is a development bootstrap, not a deployable bridge: it is synchronous, single-connection-at-a-time, has no TLS termination and does not yet enqueue media.
+A minimal Boost.Beast HTTP server is now built as `yoinks-mpd`. It exposes an unauthenticated health endpoint and a Bearer-protected queue endpoint that intentionally returns HTTP 503 until the resolver, HTTP media relay and MPD queue manager are integrated. The server enforces a 16 KiB request-body limit, an 8 KiB header limit and socket read/write deadlines. It binds to loopback by default. This is a development bootstrap, not a deployable bridge: request handling is synchronous per connection on a fixed worker pool, there is no TLS termination, and media is not yet enqueued.
 
 
 The server also validates YouTube URLs on the Raspberry Pi: HTTPS only, exact host allowlist, no userinfo or fragments, and strict video/playlist identifier and path checks. Client-side validation is not trusted as the security boundary.
