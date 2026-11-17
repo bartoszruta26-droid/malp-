@@ -145,6 +145,8 @@ http::response<http::string_body> handle(
         Json result;
         result["success"] = queued.success;
         result["queued"] = queued.queued;
+        result["started"] = queued.started;
+        result["playlist"] = queued.queued > 1;
         result["rollback_complete"] = queued.rollback_complete;
         if (!queued.success) {
             result["error"] = {{"code", queued.error_code},
