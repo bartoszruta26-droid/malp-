@@ -6,6 +6,7 @@ on:
       - "yoinks-mpd/**"
       - "scripts/yoinks-mpd/install.sh"
       - "scripts/yoinks-mpd/yoinks-mpd.service"
+      - "scripts/yoinks-mpd/INSTALL.md"
       - "scripts/yoinks-mpd/diagnose-mpd-http.sh"
       - ".github/workflows/yoinks-mpd-core.yml"
   pull_request:
