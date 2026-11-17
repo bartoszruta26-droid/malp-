@@ -88,6 +88,45 @@ void testUnknownOutcomeRetainsCapabilities() {
     require(sessions->size() == 1, "ambiguous MPD result must retain referenced capability");
 }
 
+void testMpdSnapshotPrunesStaleSessionsBeforeQueueing() {
+    auto sessions = std::make_shared<yoinks::LazyStreamSessionRegistry>();
+    const auto stale = sessions->create("dQw4w9WgXcQ");
+    yoinks::YoutubeQueueServiceConfig config;
+    config.stream_port = 8788;
+    config.sessions = sessions;
+    config.resolve_metadata = [](const std::string&) { return metadata(1); };
+    config.enqueue = [](const std::vector<std::string>& uris, bool) {
+        yoinks::MpdQueueResult result; result.success = true; result.queued = uris.size(); return result;
+    };
+    config.queued_session_ids = [](std::vector<std::string>& ids) {
+        ids.clear();
+        return true;
+    };
+    yoinks::YoutubeQueueService service(std::move(config));
+    const auto result = service.enqueue("https://youtu.be/abcdefghijk", false);
+    require(result.success && !sessions->contains(stale) && sessions->size() == 1,
+            "MPD reconciliation must remove stale capabilities before allocating new ones");
+}
+
+void testMpdSnapshotFailurePreventsQueueMutation() {
+    auto sessions = std::make_shared<yoinks::LazyStreamSessionRegistry>();
+    bool enqueue_called = false;
+    yoinks::YoutubeQueueServiceConfig config;
+    config.stream_port = 8788;
+    config.sessions = sessions;
+    config.resolve_metadata = [](const std::string&) { return metadata(1); };
+    config.enqueue = [&](const std::vector<std::string>&, bool) {
+        enqueue_called = true; return yoinks::MpdQueueResult{};
+    };
+    config.queued_session_ids = [](std::vector<std::string>&) { return false; };
+    yoinks::YoutubeQueueService service(std::move(config));
+    const auto result = service.enqueue("https://youtu.be/abcdefghijk", false);
+    require(!result.success && result.error_code == "mpd_reconcile_failed",
+            "MPD snapshot failure must be surfaced");
+    require(!enqueue_called && sessions->size() == 0,
+            "queue mutation and session allocation must stop when reconciliation fails");
+}
+
 void testPlaylistLimitAndMetadataFailure() {
     auto sessions = std::make_shared<yoinks::LazyStreamSessionRegistry>();
     yoinks::YoutubeQueueService too_many({8788, 200, sessions,
@@ -110,6 +149,8 @@ int main() {
     testPlayNowIsReportedOnlyAfterQueueConfirmation();
     testKnownRollbackRemovesCapabilities();
     testUnknownOutcomeRetainsCapabilities();
+    testMpdSnapshotPrunesStaleSessionsBeforeQueueing();
+    testMpdSnapshotFailurePreventsQueueMutation();
     testPlaylistLimitAndMetadataFailure();
     std::cout << "YouTube queue service tests passed\n";
 }
