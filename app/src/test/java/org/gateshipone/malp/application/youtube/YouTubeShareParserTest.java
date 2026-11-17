@@ -77,6 +77,32 @@ public class YouTubeShareParserTest {
         assertTrue(urls.get(1).contains("watch?v=abcdefghijk"));
     }
 
+    @Test public void extractsLinksFromMultipleTextPayloadsAndDeduplicates() {
+        List<String> urls = YouTubeShareParser.extractYouTubeUrls(
+                java.util.Arrays.asList(
+                        "https://youtu.be/dQw4w9WgXcQ",
+                        "shared text without a link",
+                        "https://www.youtube.com/watch?v=abcdefghijk",
+                        "https://youtu.be/dQw4w9WgXcQ"));
+        assertEquals(2, urls.size());
+        assertEquals("https://youtu.be/dQw4w9WgXcQ", urls.get(0));
+        assertTrue(urls.get(1).contains("watch?v=abcdefghijk"));
+    }
+
+    @Test public void ignoresNonTextPayloadsInMultipleShare() {
+        List<String> urls = YouTubeShareParser.extractYouTubeUrls(
+                java.util.Arrays.asList(
+                        null,
+                        Integer.valueOf(42),
+                        "https://youtu.be/dQw4w9WgXcQ"));
+        assertEquals(1, urls.size());
+        assertEquals("https://youtu.be/dQw4w9WgXcQ", urls.get(0));
+    }
+
+    @Test public void nullMultipleSharePayloadReturnsNoUrls() {
+        assertTrue(YouTubeShareParser.extractYouTubeUrls((Iterable<?>) null).isEmpty());
+    }
+
     @Test public void ignoresInvalidLinksAmongValidSharedLinks() {
         List<String> urls = YouTubeShareParser.extractYouTubeUrls(
                 "https://example.com/video https://youtu.be/dQw4w9WgXcQ");
