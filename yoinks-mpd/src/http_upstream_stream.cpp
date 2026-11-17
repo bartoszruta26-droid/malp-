@@ -15,7 +15,13 @@
 namespace yoinks {
 namespace {
 
+bool ensureCurlInitialized() {
+    static const CURLcode initialized = curl_global_init(CURL_GLOBAL_DEFAULT);
+    return initialized == CURLE_OK;
+}
+
 bool validResolvedUrl(const std::string& value) {
+    if (!ensureCurlInitialized()) return false;
     CURLU* parsed = curl_url();
     if (parsed == nullptr) return false;
     const CURLUcode set_result = curl_url_set(parsed, CURLUPART_URL, value.c_str(), 0);
@@ -63,8 +69,7 @@ HttpUpstreamStream::HttpUpstreamStream(HttpUpstreamConfig config)
             || config_.low_speed_time_seconds <= 0) {
         throw std::invalid_argument("invalid HTTP upstream limits");
     }
-    static const CURLcode initialized = curl_global_init(CURL_GLOBAL_DEFAULT);
-    if (initialized != CURLE_OK) {
+    if (!ensureCurlInitialized()) {
         throw std::runtime_error("libcurl global initialization failed");
     }
 }
