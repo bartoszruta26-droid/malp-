@@ -167,3 +167,14 @@ The local HTTP proxy is a streaming relay, not a download manager. It must strea
 - W6: Android share-sheet instrumentation/emulator tests, including ACTION_SEND, malformed and multiple links, saved URL/token, HTTPS rejection, redirect rejection, enqueue/play_now and activity recreation.
 - Keep the hard requirement: audio payload only in bounded RAM buffers; no media file or persistent audio cache.
 - Keep production MPD queue and audio configuration untouched until the user explicitly runs isolated target-device tests.
+
+
+### Follow-up execution record — 2026-11-17
+- Updated `yoinks-mpd/src/http_server.cpp`: health now reports `control_ready=true`, `media_ready=false`, and `mpd_playback_verified=false` as three distinct facts. This deliberately avoids claiming media/MPD playback readiness from process startup.
+- Updated `yoinks-mpd/tests/http_api_test.sh` to assert all three readiness fields.
+- Updated this continuation audit with CI results and remaining work.
+- Rewrote `docs/yoinks-mpd/INSTALL_RASPBERRY_PI.md` to match the actual current installer: C++ build + CTest, yt-dlp checksum verification, restricted account, root-owned 0600 token environment, hardened systemd unit, loopback-only server, and optional HTTPS reverse proxy.
+- CI run `44074016126` failed because the integration test still asserted the old `control_ready=false` value after the health behavior changed. The code compiled successfully; the failure was a stale test assertion.
+- The subsequent integration test run `44074047254` passed all nine CTest tests. This validates the corrected test suite and new health fields in CI.
+- Current branch head after these changes: `810972ee27fc9cd46877b7e54f307150faf04118`.
+- No Raspberry Pi playback test, TLS deployment test, Android emulator test, or production MPD queue operation was performed in this work increment.
