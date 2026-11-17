@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -44,6 +45,7 @@ public:
 
 private:
     YoutubeQueueServiceConfig config_;
+    mutable std::mutex operation_mutex_;
 };
 
 }  // namespace yoinks
