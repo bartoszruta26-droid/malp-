@@ -211,3 +211,11 @@ All six reported cases passed: binary FIFO transfer and cleanup; playlist reject
 - Follow-up test hardening: commit `c063439c` counts each activation attempt before calling `activate()`, rather than requiring the resolver to win a scheduling race. This makes the bounded workload-completion assertion deterministic under different thread schedules. CI for this corrected head is pending.
 
 - **Sanitizer CI result:** run `44123520539` for commit `fd9a330f` completed successfully. The normal Release configure/build/CTest and the separate Debug AddressSanitizer + UndefinedBehaviorSanitizer configure/build/full CTest all passed. This validates the sanitizer configuration and test suite at that revision; the later bounded-stress test commit is being re-run separately.
+
+
+## CI watchdog added — bounded CTest execution (2026-11-17)
+
+- The latest bounded lifecycle stress revision `c063439c` passed ordinary configure/build/CTest, and the sanitizer configure/build steps completed successfully in run `44124014299`; however, its ASan/UBSan CTest step remained reported as `in_progress` for an extended period. The workflow API did not expose a completed result or downloadable job log at the time of review, so this is treated as an unresolved CI execution, not a test pass or a confirmed test failure.
+- Added a 120-second per-test CTest timeout to both normal and sanitizer suites and a 30-minute job timeout. This prevents a hung regression test from occupying a runner indefinitely and preserves diagnostic failure reporting.
+- The new watchdog configuration is a CI-only change. It does not alter runtime behavior or the production service. Its own workflow run must pass before the revised workflow is considered verified.
+- Raspberry Pi sanitizer execution remains blocked until a completed CI run confirms the exact stress-test revision. No production installation or restart occurred.
