@@ -663,3 +663,8 @@ Control API waliduje URL niezależnie od Androida: HTTPS, dokładną allowlistę
 Dodano `HttpUpstreamStream` (C++17/libcurl): walidację URL źródłowego, wyłącznie HTTPS i hosty w granicy domeny `googlevideo.com`, port 443, zakaz userinfo, weryfikację TLS, brak automatycznych przekierowań, timeout połączenia i limit niskiej prędkości. Dane są zapisywane callbackiem bezpośrednio do stałego bufora RAM o domyślnej pojemności 256 KiB; back-pressure blokuje producenta, limit danych sesji wynosi 512 MiB. Anulowanie czyści bufor i odblokowuje producenta. Dodano testy allowlisty i błędnego startu bez dostępu do sieci.
 
 To nadal wyłącznie komponent upstream → RAM. Brakuje stabilnego rejestru sesji, lokalnego endpointu HTTP z odpowiedzią strumieniowaną/chunked, kontroli zakresów/HEAD według rzeczywistego zachowania MPD oraz testów odtwarzania. Nie wolno oznaczać proxy ani całego mostu jako gotowego.
+
+
+## Aktualizacja — współbieżność i ekspozycja API (2026-11-17)
+
+Serwer ma stałą pulę czterech wątków i limit 16 zaakceptowanych/zleconych połączeń; nadmiar otrzymuje 503. Adres nasłuchu musi być loopback — konfiguracja adresu LAN jest odrzucana do czasu zaprojektowania TLS. Test integracyjny obejmuje osiem równoległych żądań health. Długie połączenia strumieniowe będą wymagały osobnego, ograniczonego wykonawcy, aby nie blokować API sterującego.
