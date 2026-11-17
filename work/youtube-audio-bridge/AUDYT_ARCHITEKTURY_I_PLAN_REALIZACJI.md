@@ -708,3 +708,22 @@ Commit `6cbc9dd3ef80e038960b9ffbffb25c0fa244b72c` przenosi obsługę aktywnego s
 6. Uzyskać aktualny wynik build/test na Raspberry Pi; poprzedni PASS na Pi dotyczy wcześniejszego stanu przed endpointem i osobną pulą.
 
 **Ocena:** endpoint strumieniowy i osobna pula zostały zaimplementowane w kodzie, lecz nie są jeszcze połączone z kolejką. Nie ma podstaw do stwierdzenia, że odtwarzanie YouTube działa end-to-end.
+
+## Uzupełnienie — testowalna ścieżka chunked HTTP (2026-11-17)
+
+Kontrola GitHub Actions dla commita `6cbc9dd3ef80e038960b9ffbffb25c0fa244b72c` zakończyła się wynikiem `build-and-test: success` (job `133909221968`, 2026-11-17 08:17:12 UTC).
+
+Wyodrębniono wspólną dla produkcyjnego endpointu i testów funkcję `writeChunkedStream` w `yoinks-mpd/include/yoinks/chunked_stream_writer.hpp`. Endpoint `/stream/{id}` korzysta teraz z tej samej implementacji, którą testuje nowy cel CTest `chunked_stream_writer`.
+
+Testy obejmują: porcjowanie do maksymalnie 16 KiB, poprawne ramkowanie chunków, terminujący chunk przy potwierdzonym EOF upstream, brak terminatora przy błędzie upstream oraz natychmiastowe przerwanie odczytu po błędzie zapisu do socketu. Testy nie tworzą produkcyjnej ścieżki wstrzykiwania sesji i nie osłabiają allowlisty `googlevideo.com`.
+
+Zmiany zapisano w commitach: `3c78fed` (helper), `8020523`/`8d155eb`/`191845f` (test i korekty asercji), `16d0fd5` (CTest), `226d3fc` (użycie helpera w serwerze), `3f2d9e0` (README).
+
+**Status weryfikacji:** nowe testy zostały dodane do CMake/CTest, ale ich wykonanie w CI dla najnowszej gałęzi jest jeszcze oczekiwane. Nie deklarować PASS przed zakończeniem workflow. Nie wykonano nowego builda na Raspberry Pi. Testy ramkowania nie zastępują testu live HTTP → MPD CURL.
+
+### Następny etap
+
+1. Po wyniku CI przeprowadzić przegląd lifecycle serwera i dodać kontrolowane zamykanie acceptora oraz pul workerów, wraz z anulowaniem sesji.
+2. Dodać test integracyjny obciążenia: dwa długie strumienie w puli stream i równoległy health request, z kontrolowanym mock readerem.
+3. Dopiero po tym rozpocząć resolver yt-dlp w trybie metadanych-only, przez `posix_spawn`/`execve`, z limitem wyjścia, timeoutem i bez zapisu audio.
+4. Nie podłączać jeszcze `POST /api/v1/queue` do MPD; zachować 503 aż resolver, sesje i queue manager będą kompletne.
