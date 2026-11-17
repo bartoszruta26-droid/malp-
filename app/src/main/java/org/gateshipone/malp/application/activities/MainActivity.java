@@ -288,9 +288,30 @@ public class MainActivity extends GenericActivity
             Executors.newSingleThreadExecutor();
 
     private void handleIncomingShare(@Nullable Intent intent) {
-        if (intent == null || !Intent.ACTION_SEND.equals(intent.getAction())) return;
-        String sharedText = intent.getStringExtra(Intent.EXTRA_TEXT);
-        List<String> urls = YouTubeShareParser.extractYouTubeUrls(sharedText);
+        if (intent == null) return;
+        final String action = intent.getAction();
+        final List<String> urls;
+        if (Intent.ACTION_SEND.equals(action)) {
+            urls = YouTubeShareParser.extractYouTubeUrls(
+                    intent.getStringExtra(Intent.EXTRA_TEXT));
+        } else if (Intent.ACTION_SEND_MULTIPLE.equals(action)) {
+            ArrayList<CharSequence> sharedTexts =
+                    intent.getCharSequenceArrayListExtra(Intent.EXTRA_TEXT);
+            if (sharedTexts == null || sharedTexts.isEmpty()) return;
+            List<String> extracted = new ArrayList<>();
+            for (CharSequence sharedText : sharedTexts) {
+                for (String url : YouTubeShareParser.extractYouTubeUrls(
+                        sharedText == null ? null : sharedText.toString())) {
+                    if (!extracted.contains(url)) extracted.add(url);
+                    if (extracted.size() > 1) break;
+                }
+                if (extracted.size() > 1) break;
+            }
+            urls = extracted;
+        } else {
+            return;
+        }
+
         if (urls.isEmpty()) return;
         if (urls.size() != 1) {
             Snackbar.make(findViewById(R.id.drawer_layout),
