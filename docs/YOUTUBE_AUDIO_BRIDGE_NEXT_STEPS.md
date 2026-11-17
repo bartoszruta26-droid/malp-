@@ -347,3 +347,13 @@ Nie publikować APK jako „gotowego do instalacji” na podstawie samego CI. Wy
 - Added `scripts/yoinks-mpd/live-smoke-test.sh`: an explicit, non-root manual test that starts an isolated MPD instance on a free loopback port with a null output, starts a separate bridge process against that MPD, submits one supplied YouTube URL using the installed yt-dlp, and checks MPD playback plus the local proxy URI. Temporary MPD state/logs are removed at exit; no production MPD queue is accessed and no media file/cache is downloaded.
 - Documented the manual command in `scripts/yoinks-mpd/INSTALL.md`. The live script is syntax-checked in CI but is not run automatically because it requires external YouTube access and a user-supplied URL.
 - Latest commits for the guard correction and live test are pending CI verification; do not mark the latest branch head green until that workflow finishes.
+
+
+### Live smoke script cleanup and latest CI gate — 2026-11-17
+
+- Corrected the live smoke script after its first CI syntax check exposed stale duplicated fragments left by an earlier edit. The file now contains one complete execution path and one final success report.
+- Corrected URL handling: the script rejects quotes, backslashes and control characters before embedding the user-supplied URL in its JSON request.
+- The real-daemon test and live smoke script now capture the complete `mpd --version` output before checking for `curl`; this avoids Bash `pipefail`/SIGPIPE false negatives from `grep -q`.
+- Latest branch revision at this update: `76277cea960f1fcd10ab9809ec68c95476f1def5`. CI run `44092051129` is in progress; dependency installation is still running and shell syntax/build/CTest steps have not yet completed.
+- Prior confirmed real MPD run `44090982855` passed 11/11 tests, including real daemon playback from the deterministic local WAV fixture. The later capability-guard revision failed due to the pipefail check and is being revalidated; do not treat that failed run as a product playback failure.
+- The opt-in live test is documented in `scripts/yoinks-mpd/INSTALL.md`. It has not been run against a live YouTube source or on the target Raspberry Pi. Production MPD and its queue remain untouched.
