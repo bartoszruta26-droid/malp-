@@ -39,6 +39,8 @@ public:
     // Resolves and starts exactly one upstream stream on first GET.
     bool activate(const std::string& id, const ResolveAudioUrl& resolver);
     std::shared_ptr<HttpUpstreamStream> findActive(const std::string& id) const;
+    bool contains(const std::string& id) const;
+    bool isFailed(const std::string& id) const;
     bool erase(const std::string& id);
     void clear();
     std::size_t size() const;
