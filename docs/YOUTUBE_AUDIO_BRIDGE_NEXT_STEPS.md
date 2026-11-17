@@ -178,3 +178,12 @@ The local HTTP proxy is a streaming relay, not a download manager. It must strea
 - The subsequent integration test run `44074047254` passed all nine CTest tests. This validates the corrected test suite and new health fields in CI.
 - Current branch head after these changes: `810972ee27fc9cd46877b7e54f307150faf04118`.
 - No Raspberry Pi playback test, TLS deployment test, Android emulator test, or production MPD queue operation was performed in this work increment.
+
+
+### Android multiple-share handling — 2026-11-17
+- Added an `ACTION_SEND_MULTIPLE` text/plain intent filter to the Android manifest.
+- `MainActivity` now safely extracts YouTube URLs from the shared text list, de-duplicates identical links, and accepts exactly one distinct valid YouTube URL. Multiple distinct links continue to show the existing explicit unsupported-multiple-links message; no batch queue insertion or implicit playback was added.
+- Added parser tests for multiple-link extraction order, duplicate removal, ignoring invalid links, null/empty input, userinfo rejection and non-standard port rejection.
+- Commits: `e3d8309c27735910607e0fc6aa96fcf5cced93de` (activity), `d26d38cab407e46fa27432808919989efbe4c30d` (manifest), `bc54a4f4e74c6306690d63a8d4cbc00085b75eb4` (tests).
+- CI runs `44074441626`, `44074465965` and `44074498551` were launched for the three consecutive Android commits. Their outcomes must be inspected separately; a later queued run is the complete-tree verification.
+- Legacy global cleartext HTTP remains unchanged pending a complete audit of MALP's existing MPD HTTP and artwork endpoints. The YouTube bridge itself continues to enforce HTTPS and rejects redirects.
