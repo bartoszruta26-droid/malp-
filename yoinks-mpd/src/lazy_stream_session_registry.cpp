@@ -179,6 +179,7 @@ bool LazyStreamSessionRegistry::isFailed(const std::string& id) const {
 
 bool LazyStreamSessionRegistry::release(const std::string& id, bool cancel_upstream) {
     std::shared_ptr<HttpUpstreamStream> stream;
+    bool reserved_slot = false;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         const auto found = sessions_.find(id);
@@ -186,12 +187,15 @@ bool LazyStreamSessionRegistry::release(const std::string& id, bool cancel_upstr
         found->second.serving = false;
         if (cancel_upstream) {
             found->second.refresh_required = true;
-            found->second.activating = true;  // reserve the slot until cancellation is joined
+            found->second.activating = true;
+            reserved_slot = true;
             stream = std::move(found->second.stream);
         } else if (found->second.stream
                 && found->second.stream->state() != UpstreamState::running) {
             // Keep only the lightweight video-ID capability after EOF/failure.
-            // The fixed-size RAM audio buffer is released immediately.
+            // Reserve the slot until the completed stream's RAM buffer is released.
+            found->second.activating = true;
+            reserved_slot = true;
             stream = std::move(found->second.stream);
         }
     }
@@ -199,7 +203,7 @@ bool LazyStreamSessionRegistry::release(const std::string& id, bool cancel_upstr
         if (cancel_upstream) stream->cancel();
         stream->wait();
     }
-    if (cancel_upstream) {
+    if (reserved_slot) {
         std::lock_guard<std::mutex> lock(mutex_);
         const auto found = sessions_.find(id);
         if (found != sessions_.end()) found->second.activating = false;
