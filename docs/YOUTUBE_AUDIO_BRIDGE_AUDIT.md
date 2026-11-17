@@ -143,3 +143,5 @@ All six reported cases passed: binary FIFO transfer and cleanup; playlist reject
 - Added regression test `testReleaseDuringStartedButUnpublishedStreamFreesReservation()`. It pauses immediately after worker start, calls `release(id, true)`, verifies a concurrent activation is rejected while the first activation owns the reservation, resumes publication, and checks that the discarded worker is joined, the slot is freed, and a fresh activation can proceed.
 - Implementation/test commits: `b854b2f2` (test seam), `06aead23` (reservation release fix), `5c202ecd` (deterministic regression test).
 - **Verification status:** source changes are pushed to `feature/youtube-audio-bridge`; GitHub Actions and Raspberry Pi build/CTest are pending. Do not treat this fix as verified until both are checked. No production binary was installed and no service was restarted.
+
+- **CI result:** GitHub Actions run `44107862029` for exact test commit `5c202ecdd2491933f3f32427afcf6260bb318d1e` completed with conclusion `success`; configure, build, and test steps all passed. Raspberry Pi execution of this new test remains pending.
