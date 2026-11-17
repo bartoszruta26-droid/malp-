@@ -63,6 +63,27 @@ Domyślne parametry:
 
 Jednostka systemd uruchamia proces jako użytkownik `yoinks-mpd`, bez uprawnień roota. Ogranicza pamięć do 256 MiB, liczbę zadań do 32, dostęp do systemu plików i rodziny gniazd. Logi trafiają do journald.
 
+
+## Rzeczywisty test YouTube na odizolowanym MPD
+
+Po zainstalowaniu Yoinks-MPD, yt-dlp, MPD z wejściem CURL oraz klienta `mpc`, można wykonać jawnie uruchamiany test rzeczywistego źródła:
+
+```bash
+bash scripts/yoinks-mpd/live-smoke-test.sh 'https://www.youtube.com/watch?v=ID_FILMU'
+```
+
+Skrypt:
+- uruchamia osobny proces MPD na wolnym porcie loopback, z wyjściem `null`;
+- uruchamia osobny proces Yoinks-MPD z tymczasowym tokenem i wskazaniem wyłącznie tego testowego MPD;
+- używa zainstalowanego yt-dlp do rozpoznania wskazanego filmu i pobrania adresu CDN;
+- żąda od MPD odtworzenia lokalnego adresu proxy i sprawdza stan `playing`;
+- sprawdza, że kolejka zawiera URI lokalnego proxy, a nie adres YouTube/CDN;
+- usuwa tymczasową konfigurację, bazę, stan i logi po zakończeniu.
+
+Test nie łączy się z produkcyjnym MPD na porcie 6600, nie dotyka jego kolejki, nie wysyła dźwięku na głośniki (wyjście `null`) i nie pobiera plików audio. Resolver używa `--skip-download` oraz `--no-cache-dir`. Skrypt wymaga zwykłego użytkownika, a nie roota. Test wymaga dostępu do Internetu i może się nie powieść z powodu ograniczeń YouTube, geolokalizacji, wieku, limitów lub zmian po stronie yt-dlp.
+
+To test integracyjny, a nie test instalacyjny. Nie uruchamia się automatycznie i nie jest wykonywany na produkcyjnym urządzeniu bez jawnego wywołania.
+
 ## Ważne ograniczenia
 
 - Instalator **nie instaluje, nie konfiguruje, nie restartuje ani nie wysyła poleceń do MPD**.
