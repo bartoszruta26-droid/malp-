@@ -8,6 +8,7 @@ on:
       - "scripts/yoinks-mpd/yoinks-mpd.service"
       - "scripts/yoinks-mpd/INSTALL.md"
       - "scripts/yoinks-mpd/diagnose-mpd-http.sh"
+      - "scripts/yoinks-mpd/live-smoke-test.sh"
       - "work/youtube-audio-bridge/AUDYT_ARCHITEKTURY_I_PLAN_REALIZACJI.md"
       - "docs/yoinks-mpd/README.md"
       - ".github/workflows/yoinks-mpd-core.yml"
@@ -18,6 +19,7 @@ on:
       - "scripts/yoinks-mpd/yoinks-mpd.service"
       - "scripts/yoinks-mpd/INSTALL.md"
       - "scripts/yoinks-mpd/diagnose-mpd-http.sh"
+      - "scripts/yoinks-mpd/live-smoke-test.sh"
       - "work/youtube-audio-bridge/AUDYT_ARCHITEKTURY_I_PLAN_REALIZACJI.md"
       - "docs/yoinks-mpd/README.md"
       - ".github/workflows/yoinks-mpd-core.yml"
@@ -36,6 +38,7 @@ jobs:
         run: |
           bash -n scripts/yoinks-mpd/install.sh
           bash -n scripts/yoinks-mpd/diagnose-mpd-http.sh
+          bash -n scripts/yoinks-mpd/live-smoke-test.sh
           bash -n yoinks-mpd/tests/http_api_test.sh
           bash -n yoinks-mpd/tests/http_stream_test.sh
           bash -n yoinks-mpd/tests/http_mpd_daemon_test.sh
