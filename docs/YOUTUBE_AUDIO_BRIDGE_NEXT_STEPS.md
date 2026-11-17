@@ -374,3 +374,11 @@ Nie publikować APK jako „gotowego do instalacji” na podstawie samego CI. Wy
 3. Complete the upstream URL/DNS threat review. Current URL validation restricts HTTPS URLs to `googlevideo.com` and subdomains, rejects userinfo and non-443 ports, disables redirects, and enables TLS peer/hostname verification. Explicit DNS-resolved IP-range policy is not yet implemented; assess whether the deployment threat model requires it and choose a design that preserves TLS hostname verification.
 4. Exercise slow consumers/back-pressure, client disconnect, upstream timeout/failure, byte-limit enforcement, reconnect/re-resolution, and service shutdown.
 5. Keep live YouTube/CDN retrieval, target Raspberry Pi MPD CURL support, audible playback, and RAM-only/no-persistent-storage verification as separate acceptance gates. Do not install the test binary or restart the production service without explicit approval.
+
+
+## In-progress lifecycle fix — release during activation (2026-11-17)
+
+- New commits: `25030068` (implementation), `5fb5d0fa` (regression test), `36d9f70a` (deterministic cancellation wait in test).
+- `release(id, true)` now cancels an in-flight resolver and does not clear the activation reservation prematurely. A subsequent retry receives a fresh cancellation token.
+- Regression test covers cancellation delivery, rejection of overlapping activation while the first resolver is still blocked, and successful acquisition of a fresh token on retry.
+- GitHub Actions and Raspberry Pi build/CTest verification are pending. Do not install or restart production service.
