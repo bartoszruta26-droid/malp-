@@ -141,3 +141,66 @@ Uwaga: przy `set -e` polecenie kończące się błędem przerwie skrypt. Dla pe�
 - [ ] Brak instalacji/restartu produkcyjnej usługi i brak zmian kolejki MPD.
 
 **Status końcowy na 2026-11-17:** kompilacja ARM64 z logu użytkownika udana; ASan/UBSan na Raspberry Pi zablokowane przez awarię inicjalizacji ASan; wyniki testów integracyjnych MPD są niewiarygodne do czasu uruchomienia komponentów bez awarii runtime; CI x86_64 dla pełnego Release i ASan/UBSan zakończone powodzeniem. Nie wydawać zgody na wdrożenie produkcyjne na podstawie tych wyników.
+
+
+## 7. Uzupełnienie po minimalnych reproduktorach ARM64 (wyniki użytkownika)
+
+Środowisko:
+- Linux `6.12.75+rpt-rpi-v8`, Debian/Raspberry Pi kernel, `aarch64`;
+- glibc `2.41`;
+- GCC/G++ `14.2.0-19`;
+- runtime wskazany przez kompilator: `/usr/lib/gcc/aarch64-linux-gnu/14/libasan.so` oraz `libubsan.so`.
+
+Wyniki:
+1. Minimalny program `int main(){return 0;}`, skompilowany wyłącznie z `-fsanitize=address`, kończy się tym samym CHECK w `sanitizer_allocator_primary64.h:131`. Zanim nastąpi awaria, ASan zgłasza liczne `failed to intercept` dla symboli libc (m.in. `__isoc99_printf`, `__isoc99_sprintf`, `__isoc99_snprintf`, funkcji XDR i `pthread_mutexattr_getrobust_np`).
+2. Minimalny program `-fsanitize=undefined` kończy się bez diagnostyki i skrypt przechodzi do kolejnej sekcji. Jest to pozytywny wynik UBSan-only dla pustego programu, ale nie jest jeszcze dowodem poprawności całej aplikacji.
+3. Właściwy test `yoinks_mpd_core_tests` ponownie kończy się identycznym CHECK ASan. Nie ma podstaw, aby interpretować to jako wykrycie błędu bufora w kodzie projektu.
+
+Wniosek po aktualizacji: problem ASan jest reprodukowalny poza Yoinks-MPD na tym samym Raspberry Pi. Można z wysoką pewnością odseparować go od logiki aplikacji; dokładna przyczyna w kombinacji runtime GCC/libasan, glibc, konfiguracji systemu i mapowania pamięci pozostaje do ustalenia. Nie przypisywać winy samemu kernelowi ani nie zalecać przypadkowego wyłączenia ASLR/PIE.
+
+Korekta wcześniejszego statusu: UBSan-only dla minimalnego reproduktora przeszedł; ASan-only dla minimalnego reproduktora nie przeszedł. Pełny zestaw testów aplikacji pod UBSan-only nadal nie został uruchomiony.
+
+### Następny, bezpieczny krok diagnostyczny
+
+Zebrać dokładne wersje pakietów, zależności runtime i zmienne środowiskowe, bez aktualizacji systemu i bez modyfikacji usług:
+
+```bash
+echo "=== PACKAGE VERSIONS ==="
+dpkg-query -W -f='${Package} ${Version} ${Architecture}\n' \
+  gcc-14 g++-14 libasan8 libubsan1 libc6 2>&1
+
+echo "=== RUNTIME DEPENDENCIES ==="
+ldd /tmp/asan-minimal
+readelf -d /tmp/asan-minimal | grep -E 'NEEDED|RPATH|RUNPATH' || true
+readelf -h /tmp/asan-minimal | grep -E 'Class:|Machine:|Type:'
+
+echo "=== ASAN LIBRARY ==="
+ASAN_LIB="$(g++ -print-file-name=libasan.so)"
+ls -l "$ASAN_LIB"
+readlink -f "$ASAN_LIB"
+dpkg -S "$(readlink -f "$ASAN_LIB")" 2>&1 || true
+
+echo "=== ENVIRONMENT ==="
+env | grep -E '^(LD_|ASAN_|UBSAN_|GLIBC_TUNABLES=)' || true
+cat /proc/sys/kernel/randomize_va_space
+
+echo "=== UBSAN-ONLY PROJECT BUILD ==="
+cmake -S yoinks-mpd -B /tmp/yoinks-mpd-ubsan-only \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DYOINKS_MPD_ENABLE_SANITIZERS=OFF \
+  -DCMAKE_CXX_FLAGS="-fsanitize=undefined -fno-omit-frame-pointer" \
+  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=undefined"
+cmake --build /tmp/yoinks-mpd-ubsan-only --parallel 2
+UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 \
+  ctest --test-dir /tmp/yoinks-mpd-ubsan-only --output-on-failure
+```
+
+Uwaga: ta konfiguracja UBSan-only jest tymczasowym buildem diagnostycznym. Nie zmienia konfiguracji projektu ani binariów produkcyjnych. Wynik należy raportować oddzielnie dla testów jednostkowych i integracyjnych.
+
+Kryteria:
+- [x] ASan minimalny reproduktor: awaria poza aplikacją — potwierdzona.
+- [x] UBSan minimalny reproduktor: przechodzi.
+- [ ] Ustalenie wersji pakietów i zależności libasan.
+- [ ] Pełny CTest projektu w buildzie UBSan-only.
+- [ ] Pełny Release CTest na Raspberry Pi.
+- [ ] Test izolowanego MPD/CURL.
