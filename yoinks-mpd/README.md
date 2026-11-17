@@ -94,3 +94,9 @@ This is a library-level cancellation primitive only: the HTTP request lifecycle 
 ## Resolver descriptor isolation
 
 Before spawning yt-dlp, resolver pipe descriptors are moved above file descriptors 0–2. This prevents `posix_spawn` file actions from accidentally closing or overwriting stdin/stdout/stderr when the parent service starts with one or more standard descriptors closed. A fork-based regression test closes all three standard descriptors in the child and verifies metadata resolution still succeeds. No media file is created.
+
+## MPD queue manager — isolated implementation
+
+A loopback-only `MpdQueueManager` has been added as an isolated component. It accepts only exact local proxy URIs (`http://127.0.0.1:<stream-port>/stream/<32-char-opaque-id>`), connects only to a loopback MPD endpoint, and appends entries with `addid` so stable MPD song IDs are used. Enqueue mode does not issue playback commands. `play_now` issues `playid` for the first newly-added entry only when explicitly requested. The component never calls `clear` and never changes repeat, random, single or consume modes.
+
+Known successful additions are rolled back with `deleteid` if MPD explicitly rejects a later add or the explicit `playid`. Ambiguous transport outcomes are reported as unknown and are not destructively rolled back, because the server may already have accepted the command or started playback. The component is not yet connected to the HTTP queue endpoint. It must pass mock-protocol tests and then a controlled Raspberry Pi MPD/CURL compatibility test before deployment.
