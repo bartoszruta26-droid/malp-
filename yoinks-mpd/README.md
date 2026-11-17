@@ -90,3 +90,7 @@ The resolver is a tested library component, not yet connected to `POST /api/v1/q
 The resolver now accepts an optional caller-owned `std::atomic_bool` cancellation flag for metadata and direct-URL resolution. When set, the resolver terminates the complete yt-dlp process group, reaps the child and returns the non-sensitive `process_cancelled` code for metadata requests. The flag must remain alive for the duration of the synchronous call. Existing timeout and bounded-output protections remain in force. Unit fixtures also assert that both resolver modes pass `--ignore-config`, `--no-cache-dir` and `--skip-download`, and that URL mode passes `--get-url`.
 
 This is a library-level cancellation primitive only: the HTTP request lifecycle does not yet own or propagate cancellation to resolver calls. Queue API remains fail-closed with HTTP 503.
+
+## Resolver descriptor isolation
+
+Before spawning yt-dlp, resolver pipe descriptors are moved above file descriptors 0–2. This prevents `posix_spawn` file actions from accidentally closing or overwriting stdin/stdout/stderr when the parent service starts with one or more standard descriptors closed. A fork-based regression test closes all three standard descriptors in the child and verifies metadata resolution still succeeds. No media file is created.
