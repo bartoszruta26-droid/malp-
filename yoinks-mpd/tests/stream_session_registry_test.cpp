@@ -32,15 +32,26 @@ void testUnknownSessionLookupAndErase() {
 }
 
 void testRejectsInvalidCapacity() {
-    yoinks::StreamSessionRegistryConfig config;
-    config.maximum_sessions = 33;
+    yoinks::StreamSessionRegistryConfig too_many_sessions;
+    too_many_sessions.maximum_sessions = 33;
     bool threw = false;
     try {
-        yoinks::StreamSessionRegistry registry(config);
+        yoinks::StreamSessionRegistry registry(too_many_sessions);
     } catch (const std::invalid_argument&) {
         threw = true;
     }
     require(threw, "registry must reject an excessive session limit");
+
+    yoinks::StreamSessionRegistryConfig too_much_ram;
+    too_much_ram.maximum_sessions = 4;
+    too_much_ram.upstream.buffer_capacity = 3 * 1024 * 1024;
+    threw = false;
+    try {
+        yoinks::StreamSessionRegistry registry(too_much_ram);
+    } catch (const std::invalid_argument&) {
+        threw = true;
+    }
+    require(threw, "registry must cap aggregate session RAM at 8 MiB");
 }
 
 }  // namespace
