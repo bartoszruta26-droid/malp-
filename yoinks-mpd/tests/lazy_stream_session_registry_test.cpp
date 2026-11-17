@@ -48,6 +48,13 @@ void testActivationResolvesOnlyOnDemandAndRejectsUntrustedUrl() {
             "failed activation must not retain an active stream");
     require(registry.contains(id) && registry.isFailed(id),
             "resolver failure must remain distinguishable from an unknown session");
+    const bool retried = registry.activate(id, [&](const std::string&, std::string& url, const std::atomic_bool*) {
+        ++calls;
+        url = "https://attacker.example/retry";
+        return true;
+    });
+    require(!retried && calls == 2 && registry.isFailed(id),
+            "failed lazy sessions must permit a fresh resolver attempt on reconnect");
 }
 
 void testConcurrentActivationIsSingleFlight() {
