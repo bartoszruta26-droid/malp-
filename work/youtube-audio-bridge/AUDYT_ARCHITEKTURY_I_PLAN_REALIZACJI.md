@@ -1144,3 +1144,12 @@ Dodano testy protokołu dla zdarzenia playlisty, zdarzenia niezwiązanego z play
 - Poprawka zapisana w commicie `73155e5a61bbf0ac4510f5f4d870ffac3f001897`. CI dla tego commita jest uruchomione; do czasu zakończenia nie oznaczamy kompilacji ani testów jako zaliczonych.
 - Test atrapy MPD weryfikuje, że oba polecenia są wysyłane w jednej liście oraz że wynik zawiera `songid`, `Pos`, URI i stan odtwarzacza.
 - Nadal nie uruchomiono watchera w procesie usługi. Nie wykonano żadnej operacji na docelowej kolejce ani testu surowego URL YouTube przez `addid`.
+
+
+## Rozszerzenie testów snapshotu MPD — 2026-11-17
+
+- Rozbudowano istniejącą atrapę MPD o konfigurowalną odpowiedź command-list; zachowano jeden wspólny mechanizm testowy bez kopiowania serwera testowego.
+- Dodano przypadki: pusta playlista w stanie stop, pauza z bieżącym songid, stop z niedozwolonym songid, niekompletne wpisy (brak Id/Pos/file), nieznany lub brakujący stan, ACK z command list oraz brak separatora list_OK.
+- Testy pozostają odczytowe: nie wykonują mutacji kolejki ani komend playback.
+- Oczekują na wynik CI dla commita zawierającego tę zmianę. Testy limitu odpowiedzi i awarii połączenia pozostają do dalszego rozszerzenia; nie uznajemy ich za pokryte.
+- Obserwator nadal nie jest zintegrowany z main.cpp, a automatyczna konwersja YouTube pozostaje wyłączona.

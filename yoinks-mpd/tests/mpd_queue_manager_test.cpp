@@ -25,10 +25,15 @@ void require(bool condition, const std::string& message) {
 class MockMpd final {
 public:
     explicit MockMpd(bool fail_second_add = false, bool fail_play = false,
-                     bool drop_add_response = false, bool drop_play_response = false)
+                     bool drop_add_response = false, bool drop_play_response = false,
+                     std::string snapshot_response =
+                         "file: http://127.0.0.1:8788/stream/0123456789abcdef0123456789abcdef\n"
+                         "Id: 700\nPos: 0\nTitle: Test track\nlist_OK\n"
+                         "songid: 700\nstate: play\nOK\n")
         : acceptor_(context_, tcp::endpoint{asio::ip::address_v4::loopback(), 0}),
           fail_second_add_(fail_second_add), fail_play_(fail_play),
-          drop_add_response_(drop_add_response), drop_play_response_(drop_play_response) {
+          drop_add_response_(drop_add_response), drop_play_response_(drop_play_response),
+          snapshot_response_(std::move(snapshot_response)) {
         port_ = acceptor_.local_endpoint().port();
         worker_ = std::thread([this]() { serve(); });
     }
@@ -88,10 +93,7 @@ private:
                         send(socket, "ACK [5@0] {command_list} invalid test batch\n");
                         continue;
                     }
-                    send(socket,
-                        "file: http://127.0.0.1:8788/stream/0123456789abcdef0123456789abcdef\n"
-                        "Id: 700\nPos: 0\nTitle: Test track\nlist_OK\n"
-                        "songid: 700\nstate: play\nOK\n");
+                    send(socket, snapshot_response_);
                 } else if (line.rfind("addid ", 0) == 0) {
                     ++add_count;
                     if (drop_add_response_ && add_count == 1) return;
@@ -129,6 +131,7 @@ private:
     bool fail_play_;
     bool drop_add_response_;
     bool drop_play_response_;
+    std::string snapshot_response_;
     std::uint16_t port_{0};
     std::vector<std::string> commands_;
     std::exception_ptr worker_error_;
@@ -260,6 +263,67 @@ void testFullPlaylistStateIncludesStableIdsPositionsAndPlayerStatus() {
             "snapshot must use one read-only MPD command list");
 }
 
+void expectSnapshotFailure(const std::string& response, const std::string& expected,
+                           const std::string& message) {
+    MockMpd mock(false, false, false, false, response);
+    auto manager = managerFor(mock);
+    const auto snapshot = manager.listPlaylistState();
+    mock.join();
+    require(!snapshot.success && snapshot.error_code == expected, message);
+}
+
+void testEmptyPlaylistStoppedIsValid() {
+    MockMpd mock(false, false, false, false, "list_OK\nstate: stop\nOK\n");
+    auto manager = managerFor(mock);
+    const auto snapshot = manager.listPlaylistState();
+    mock.join();
+    require(snapshot.success && snapshot.entries.empty() && snapshot.state == "stop"
+            && !snapshot.current_song_id.has_value(),
+            "empty stopped playlist should be a valid snapshot");
+}
+
+void testPausedPlaylistRequiresAndPreservesCurrentSong() {
+    const std::string response =
+        "file: song.flac\nPos: 0\nId: 701\nlist_OK\n"
+        "state: pause\nsongid: 701\nOK\n";
+    MockMpd mock(false, false, false, false, response);
+    auto manager = managerFor(mock);
+    const auto snapshot = manager.listPlaylistState();
+    mock.join();
+    require(snapshot.success && snapshot.state == "pause"
+            && snapshot.current_song_id == 701 && snapshot.entries.size() == 1,
+            "paused snapshot should preserve its current song ID");
+}
+
+void testStoppedPlaylistMustNotContainCurrentSongId() {
+    expectSnapshotFailure("list_OK\nstate: stop\nsongid: 700\nOK\n",
+                          "mpd_status_invalid",
+                          "stopped snapshot with songid must be rejected");
+}
+
+void testMalformedPlaylistEntriesAreRejected() {
+    expectSnapshotFailure("file: song.flac\nPos: 0\nlist_OK\nstate: stop\nOK\n",
+                          "mpd_playlist_entry_invalid", "entry without Id must be rejected");
+    expectSnapshotFailure("file: song.flac\nId: 700\nlist_OK\nstate: stop\nOK\n",
+                          "mpd_playlist_entry_invalid", "entry without Pos must be rejected");
+    expectSnapshotFailure("Id: 700\nPos: 0\nlist_OK\nstate: stop\nOK\n",
+                          "mpd_playlist_entry_invalid", "entry without file must be rejected");
+}
+
+void testInvalidAndUnknownPlayerStatesAreRejected() {
+    expectSnapshotFailure("list_OK\nstate: buffering\nOK\n",
+                          "mpd_status_invalid", "unknown MPD state must be rejected");
+    expectSnapshotFailure("list_OK\nvolume: 50\nOK\n",
+                          "mpd_status_invalid", "missing MPD state must be rejected");
+}
+
+void testCommandListAckAndMissingSeparatorAreRejected() {
+    expectSnapshotFailure("ACK [5@1] {status} simulated failure\n",
+                          "mpd_snapshot_rejected", "command-list ACK must fail closed");
+    expectSnapshotFailure("state: stop\nOK\n",
+                          "mpd_snapshot_protocol_invalid", "missing list_OK must be rejected");
+}
+
 void testInvalidProxyUriIsRejectedBeforeConnecting() {
     yoinks::MpdQueueManagerConfig config;
     config.port = 1;
@@ -284,6 +348,12 @@ int main() {
         testLostPlayReplyDoesNotDeletePossiblyCurrentSong();
         testPlaylistSnapshotReturnsOnlyTrustedProxySessions();
         testFullPlaylistStateIncludesStableIdsPositionsAndPlayerStatus();
+        testEmptyPlaylistStoppedIsValid();
+        testPausedPlaylistRequiresAndPreservesCurrentSong();
+        testStoppedPlaylistMustNotContainCurrentSongId();
+        testMalformedPlaylistEntriesAreRejected();
+        testInvalidAndUnknownPlayerStatesAreRejected();
+        testCommandListAckAndMissingSeparatorAreRejected();
         testInvalidProxyUriIsRejectedBeforeConnecting();
         std::cout << "All MPD queue manager tests passed\n";
         return 0;
