@@ -357,3 +357,20 @@ Nie publikować APK jako „gotowego do instalacji” na podstawie samego CI. Wy
 - Latest branch revision at this update: `76277cea960f1fcd10ab9809ec68c95476f1def5`. CI run `44092051129` is in progress; dependency installation is still running and shell syntax/build/CTest steps have not yet completed.
 - Prior confirmed real MPD run `44090982855` passed 11/11 tests, including real daemon playback from the deterministic local WAV fixture. The later capability-guard revision failed due to the pipefail check and is being revalidated; do not treat that failed run as a product playback failure.
 - The opt-in live test is documented in `scripts/yoinks-mpd/INSTALL.md`. It has not been run against a live YouTube source or on the target Raspberry Pi. Production MPD and its queue remain untouched.
+
+
+## Progress update — 2026-11-17: registry lock fix verified on Raspberry Pi
+
+- Feature branch head: `2f40a5f8f3c5fc438d0462e9b44961126bbee8dd`.
+- The user pulled and built the revision on the Raspberry Pi; all **11/11 CTest tests passed** in 6.70 seconds.
+- GitHub Actions run `44104070635` for the same exact commit completed successfully.
+- The production `yoinks-mpd` service remained active with zero restarts. The production binary hash was unchanged; no installation or restart was performed.
+- The fix moves upstream cancellation and worker join outside the session-registry mutex. It is verified, but the exact post-start/pre-publication cancellation race still lacks a deterministic dedicated regression test.
+
+### Next implementation sequence
+
+1. Design a deterministic test seam for the post-start/pre-publication cancellation race without introducing a production-configurable network override or external network dependency. Test erase/clear/retain behavior and verify unrelated registry operations remain responsive while an upstream worker is being joined.
+2. Review lifecycle interactions among `activate()`, `erase()`, `clear()`, `release()`, and `retainOnly()`; add focused tests for cancellation, slot accounting, retry, and shutdown.
+3. Complete the upstream URL/DNS threat review. Current URL validation restricts HTTPS URLs to `googlevideo.com` and subdomains, rejects userinfo and non-443 ports, disables redirects, and enables TLS peer/hostname verification. Explicit DNS-resolved IP-range policy is not yet implemented; assess whether the deployment threat model requires it and choose a design that preserves TLS hostname verification.
+4. Exercise slow consumers/back-pressure, client disconnect, upstream timeout/failure, byte-limit enforcement, reconnect/re-resolution, and service shutdown.
+5. Keep live YouTube/CDN retrieval, target Raspberry Pi MPD CURL support, audible playback, and RAM-only/no-persistent-storage verification as separate acceptance gates. Do not install the test binary or restart the production service without explicit approval.
