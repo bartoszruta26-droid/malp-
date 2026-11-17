@@ -44,13 +44,19 @@ invalid_mode_status="$(curl --silent -o /dev/null -w '%{http_code}' \
     "http://127.0.0.1:$port/api/v1/queue")"
 [[ "$invalid_mode_status" == "400" ]]
 
+invalid_url_status="$(curl --silent -o /dev/null -w '%{http_code}' \
+    -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+    -d '{"url":"https://youtube.com.evil.example/watch?v=dQw4w9WgXcQ","mode":"enqueue"}' \
+    "http://127.0.0.1:$port/api/v1/queue")"
+[[ "$invalid_url_status" == "422" ]]
+
 not_ready_status="$(curl --silent -o /dev/null -w '%{http_code}' \
     -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
     -d '{"url":"https://youtu.be/dQw4w9WgXcQ","mode":"enqueue"}' \
     "http://127.0.0.1:$port/api/v1/queue")"
 [[ "$not_ready_status" == "503" ]]
 
-large_body="$(head -c 17000 /dev/zero | tr '\\0' 'a')"
+large_body="$(printf '%*s' 17000 '' | tr ' ' 'a')"
 large_status="$(curl --silent -o /dev/null -w '%{http_code}' \
     -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
     --data-binary "$large_body" "http://127.0.0.1:$port/api/v1/queue")"
