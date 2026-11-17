@@ -121,10 +121,10 @@ int main() {
         testInvalidUserUrlIsRejectedBeforeSpawn();
         testProcessTimeoutIsEnforced();
         testStdoutLimitIsEnforced();
-        std::cout << "All yt-dlp resolver tests passed\\n";
+        std::cout << "All yt-dlp resolver tests passed\n";
         return 0;
     } catch (const std::exception& error) {
-        std::cerr << "Test failure: " << error.what() << '\\n';
+        std::cerr << "Test failure: " << error.what() << '\n';
         return 1;
     }
 }
