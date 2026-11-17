@@ -509,3 +509,12 @@ No production binary installation or service restart without explicit user appro
 
 
 - CI caught a C++ member-initialization-order warning promoted to error in the new test seam. The initializer list has been reordered to match declaration order; verify the resulting head in both normal and sanitizer jobs.
+
+
+## CI acceptance and target-device gate — bounded buffer tests (2026-11-17)
+
+- Accepted CI revision: `2f59ce15`, run `44137984940` — Release build + full CTest passed; Debug ASan/UBSan build + full CTest passed.
+- The earlier `-Werror=reorder` build failure was fixed by matching the constructor initializer order to member declaration order.
+- Next required step: run the normal and sanitizer build/test commands on Raspberry Pi. Do not install the binary or restart the production service.
+- After target-device confirmation, proceed to integration coverage for client disconnect while upstream is blocked and for slow consumers.
+- DNS/IP SSRF remains explicitly deferred by the user.
