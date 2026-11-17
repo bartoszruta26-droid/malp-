@@ -54,11 +54,13 @@ invalid_url_status="$(curl --silent -o /dev/null -w '%{http_code}' \
     "http://127.0.0.1:$port/api/v1/queue")"
 [[ "$invalid_url_status" == "422" ]]
 
-not_ready_status="$(curl --silent -o /dev/null -w '%{http_code}' \
+# The requested real YouTube video must pass server-side URL validation.
+# 503 is expected here: the resolver/HTTP relay/MPD queue backend is not integrated yet.
+test_video_status="$(curl --silent -o /dev/null -w '%{http_code}' \
     -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
-    -d '{"url":"https://youtu.be/dQw4w9WgXcQ","mode":"enqueue"}' \
+    -d '{"url":"https://www.youtube.com/watch?v=qqAYW7uxErI","mode":"enqueue"}' \
     "http://127.0.0.1:$port/api/v1/queue")"
-[[ "$not_ready_status" == "503" ]]
+[[ "$test_video_status" == "503" ]]
 
 large_body="$(printf '%*s' 17000 '' | tr ' ' 'a')"
 large_status="$(curl --silent -o /dev/null -w '%{http_code}' \
