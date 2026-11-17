@@ -826,3 +826,33 @@ Commit `572ee0d6820f282653a501e375ef6788c9c72d77` uzyskał `build-and-test: succ
 Zmiana normalizuje deskryptory czterech końców potoków do numerów >= 3 przed konfiguracją działań `posix_spawn`. Chroni to przekierowania standardowych strumieni przed kolizją, gdy usługa startuje z zamkniętym deskryptorem 0, 1 lub 2.
 
 Dowód dotyczy runnera GitHub Actions x86_64. Nie wykonano builda na Raspberry Pi. CI nie potwierdza kompatybilności MPD CURL ani odtwarzania end-to-end.
+
+## Aktualizacja — izolowany MPD queue manager (2026-11-17)
+
+### Implementacja
+
+Utworzono `MpdQueueManager` (`include/yoinks/mpd_queue_manager.hpp`, `src/mpd_queue_manager.cpp`). Komponent łączy się wyłącznie z numerycznym adresem loopback MPD. Przyjmuje wyłącznie dokładny lokalny URI proxy `http://127.0.0.1:<stream-port>/stream/<32-znakowy-opaque-id>`. Dodaje pozycje przez `addid`, dzięki czemu używa stabilnych identyfikatorów utworów MPD. Tryb enqueue wykonuje wyłącznie `addid`; `play_now` wykonuje `playid` dla pierwszej pozycji dodanej przez bieżące żądanie, wyłącznie gdy jawnie zażądano tego trybu.
+
+Komponent nigdy nie wysyła `clear` i nie zmienia repeat/random/single/consume. Przy jednoznacznym odrzuceniu kolejnego `addid` lub `playid` usuwa wyłącznie znane ID dodane przez to żądanie (`deleteid`). Przy utracie odpowiedzi transportowej traktuje wynik jako niejednoznaczny: nie usuwa potencjalnie odtwarzanego utworu i zachowuje znane ID do późniejszego uzgodnienia. Nieznany wynik nie jest raportowany jako sukces.
+
+### Testy i CI
+
+Utworzono mock MPD oparty na rzeczywistym protokole tekstowym. Testy obejmują dopisywanie bez zmian sterowania odtwarzaniem, jawne play-now, rollback po jednoznacznym błędzie, zachowanie się przy utracie odpowiedzi `addid` oraz ochronę potencjalnie bieżącego utworu przy utracie odpowiedzi `playid`, a także odrzucanie obcych URI proxy.
+
+Commit `bd68ff55ea40face9d185a9d1da1ad870e0dacf9` uzyskał `build-and-test: success` w GitHub Actions (run `44049529799`, job `133923538442`, zakończony 2026-11-17 08:47:00 UTC). Build zakończony powodzeniem, CTest: **7/7 PASS** (`bounded_stream_buffer`, `http_upstream_validation`, `stream_session_registry`, `chunked_stream_writer`, `yt_dlp_resolver`, `mpd_queue_manager`, `http_api_integration`).
+
+Wcześniejszy przebieg dla commita `c8086b7...` nie przeszedł kompilacji z powodu błędnego literału znaku końca linii w nowym mocku MPD. Poprawiono go w `f550138...`; następne przebiegi, w tym końcowy `bd68ff5...`, przeszły. Błąd dotyczył testowego mocka, nie implementacji klienta MPD.
+
+### Ograniczenia i bramki przed integracją
+
+- `MpdQueueManager` jest komponentem izolowanym i nie jest jeszcze wstrzyknięty do `HttpServer`; `POST /api/v1/queue` nadal musi zwracać 503.
+- Testy MPD wykonano z mockiem protokołu, a nie z działającym MPD na Raspberry Pi. Nie zmieniano produkcyjnej kolejki.
+- Obecny `StreamSessionRegistry` tworzy aktywne upstreamy i ma limit czterech sesji. Nie można więc bezpiecznie tworzyć po jednej aktywnej sesji dla całej playlisty do 200 pozycji. Przed połączeniem queue managera z API trzeba wprowadzić sesje leniwe (uruchamiane przy żądaniu MPD) albo równoważny mechanizm ograniczający aktywne źródła.
+- Należy również zaprojektować odświeżanie wygasłych adresów CDN bez ujawniania ich MPD/Androidowi oraz przetestować zachowanie rzeczywistego MPD CURL wobec HEAD, Range, reconnect i chunked transfer.
+
+### Następny etap
+
+1. Zaprojektować i przetestować leniwy rejestr sesji: zapisuje wyłącznie video ID i metadane w RAM, a URL CDN rozwiązuje dopiero przy GET `/stream/{id}`; zachować limit dwóch aktywnych strumieni i twardy limit pamięci.
+2. Dodać odświeżanie URL źródłowego po wygaśnięciu/odrzuceniu źródła, bez automatycznego przekierowania poza allowlistę `googlevideo.com`.
+3. Dopiero po testach sesji połączyć resolver → registry → MpdQueueManager w `POST /api/v1/queue`; do tego czasu endpoint pozostaje fail-closed 503.
+4. Uzyskać kontrolowany raport MPD CURL z Raspberry Pi przed aktywacją produkcyjnego odtwarzania.
