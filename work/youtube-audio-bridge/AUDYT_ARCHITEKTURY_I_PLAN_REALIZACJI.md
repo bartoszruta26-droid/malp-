@@ -528,17 +528,16 @@ Nie należy od razu pisać całego demona. Najpierw trzeba zamknąć najdroższe
 
 ### Potwierdzone przez inspekcję kodu
 
-- Istnieje producent FIFO Bash dla pojedynczego URL.
-- Istnieje instalator yt-dlp i testy offline z atrapą programu.
+- Istnieje instalator yt-dlp jako resolvera; historyczny prototyp producenta i jego testy zostały usunięte.
 - Istnieją klasy Android parsera, klienta HTTP i preferencji.
 - MainActivity wykonuje żądanie HTTP w executorze, ale jawnie informuje, że dodawanie do kolejki nie jest jeszcze dostępne.
 - Manifest obsługuje ACTION_SEND, nie ACTION_SEND_MULTIPLE.
-- Główny README i dokument Yoinks-MPD opisują FIFO, podczas gdy nowszy plan zawiera docelowy wariant HTTP.
+- Dokumentacja bieżąca i kontrakt API opisują wyłącznie HTTP proxy; niniejsza sekcja jest aktualizacją stanu po korekcie architektury.
 - Nie znaleziono serwera Pi implementującego endpoint Androida ani implementacji MPD queue managera w sprawdzonych plikach.
 
 ### Zgłoszone wcześniej, ale nieodtworzone niezależnie
 
-Dokument audytu prototypu zapisuje, że użytkownik uruchomił na Raspberry Pi trzy polecenia testujące składnię Bash i sześć przypadków testowych FIFO, które zakończyły się powodzeniem. Jest to dowód zgłoszony przez użytkownika, nie niezależnie odtworzony wynik w tym środowisku. Test nie potwierdza kompatybilności wejścia MPD ani odtwarzania YouTube.
+Historyczne wyniki testów dotyczyły wyłącznie usuniętego prototypu i nie stanowią dowodu dla obecnej architektury HTTP proxy. Nie są zaliczane jako testy aktualnej gałęzi.
 
 ### Nie wykonano w ramach tego audytu
 
@@ -551,14 +550,14 @@ Dokument audytu prototypu zapisuje, że użytkownik uruchomił na Raspberry Pi t
 - testów śledzenia zapisów na trwałe nośniki;
 - niezależnego testu bezpieczeństwa sieciowego.
 
-**Werdykt końcowy:** architektura jest wykonalna pod warunkiem potwierdzenia MPD CURL input i poprawnej implementacji relay. Obecny kod nie spełnia jeszcze celu użytkowego. Najrozsądniejsza droga to najpierw dowód zgodności MPD, następnie C++ HTTP relay z ograniczonym buforem RAM, potem manager kolejki i na końcu pełna integracja Androida. Bezpieczeństwo RAM-only musi być mierzone na systemie docelowym, włącznie ze swap, a nie wywodzone wyłącznie z braku plików w katalogu roboczym.
+**Werdykt końcowy:** architektura jest wykonalna pod warunkiem potwierdzenia MPD CURL input i poprawnej implementacji relay. Obecny kod nie spełnia jeszcze celu użytkowego. Najrozsądniejsza droga to równoległe potwierdzenie zgodności MPD i budowa szkieletu C++ z testami, następnie resolver, HTTP proxy z ograniczonym buforem RAM, manager kolejki i pełna integracja Androida. Bezpieczeństwo RAM-only musi być mierzone na systemie docelowym, włącznie ze swap, a nie wywodzone wyłącznie z braku plików w katalogu roboczym.
 
 
 ## Aktualizacja wykonania etapów — 2026-11-17
 
 ### W0 — ujednolicenie dokumentacji
 
-**Status: wykonano po stronie repozytorium.** Zaktualizowano główny README, dokument Yoinks-MPD, plan kolejnych prac, instrukcję instalacji Raspberry Pi oraz indeks obszaru roboczego. Jednoznacznie wskazano lokalny HTTP relay w C++ i wejście CURL MPD jako architekturę docelową. FIFO pozostało prototypem producenta i nie jest przedstawiane jako wejście MPD.
+**Status: wykonano po stronie repozytorium.** Zaktualizowano główny README, dokument Yoinks-MPD, plan kolejnych prac, instrukcję instalacji Raspberry Pi oraz indeks obszaru roboczego. Jednoznacznie wskazano lokalny HTTP proxy w C++ i wejście CURL MPD jako jedyną architekturę docelową. Usunięto historyczny prototyp i testy.
 
 ### W1 — diagnostyka zgodności MPD/CURL
 
