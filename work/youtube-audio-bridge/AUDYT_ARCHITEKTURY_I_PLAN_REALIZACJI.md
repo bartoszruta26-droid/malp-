@@ -650,3 +650,8 @@ Dodano katalog `yoinks-mpd/`:
 Dodano Boost.Beast HTTP server, executable `yoinks-mpd`, konfigurację środowiskową `YOINKS_MPD_BIND`, `YOINKS_MPD_PORT`, `YOINKS_MPD_TOKEN`, kontrolę tokenu Bearer (porównanie stałoczasowe), limit body 16 KiB, limit nagłówków 8 KiB i timeouty odczytu/zapisu. Domyślny bind to 127.0.0.1. `GET /api/v1/health` odpowiada statusem usługi. `POST /api/v1/queue` waliduje JSON i mode, ale celowo zwraca 503 backend_not_ready, dopóki nie powstaną resolver, HTTP relay i MPD queue manager.
 
 Dodano test integracyjny uruchamiający proces i sprawdzający health, 401, 400, fail-closed 503 oraz 413. Test jest zarejestrowany w CTest. CI instaluje Boost i nlohmann-json przed budowaniem. **Nie ma jeszcze potwierdzonego przebiegu CI** dla najnowszego commita; nie deklarować kompilacji serwera jako zaliczonej. Serwer jest synchroniczny i obsługuje połączenia pojedynczo, bez TLS — nie jest gotowy do wystawienia w LAN/produkcji.
+
+
+## Uzupełnienie — walidacja adresu po stronie serwera
+
+Control API waliduje URL niezależnie od Androida: HTTPS, dokładną allowlistę hostów, brak userinfo i fragmentu oraz identyfikatory filmu/playlisty i ścieżki. Dodano przypadek integracyjny odrzucający host podobny do YouTube kodem 422. Testy nadal oczekują na wykonanie przez CI.
