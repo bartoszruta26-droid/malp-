@@ -1022,3 +1022,12 @@ Dodano kompletny instalator `scripts/yoinks-mpd/install.sh` oraz jednostkę `scr
 - Dodano `scripts/yoinks-mpd/INSTALL.md` z procedurą instalacji i ograniczeniami oraz rozszerzono CI o składnię Bash, pomoc instalatora i walidację jednostki systemd.
 - Wynik CI dla zmian instalatora musi zostać oceniony po zakończeniu workflow; do tego czasu nie uznawać walidacji za zaliczoną.
 
+
+
+### Potwierdzenie CI instalatora — 2026-11-17
+
+- GitHub Actions run `44066415238`, commit `6922f684b361283760c33679a0572e4a1ec6dff3`: **success**.
+- Zaliczone kroki: składnia skryptów Bash, uruchomienie pomocy instalatora, walidacja struktury jednostki systemd, konfiguracja CMake, kompilacja C++ i pełny CTest.
+- Walidacja jednostki w CI używa testowego `ExecStart=/bin/true` i `EnvironmentFile=/dev/null`, aby sprawdzić składnię i dyrektywy bez wymagania zainstalowanego programu na runnerze.
+- Ponowna instalacja nie restartuje aktywnej usługi domyślnie, aby nie przerwać odtwarzania. Jawne `--restart` może przerwać bieżący strumień; `--no-start` pomija uruchomienie.
+- CI potwierdza składnię, kompilację, testy i strukturę jednostki, ale nie wykonuje instalacji na Raspberry Pi ani nie testuje realnego MPD/CURL.
