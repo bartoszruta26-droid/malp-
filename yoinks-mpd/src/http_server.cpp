@@ -4,7 +4,7 @@
  */
 #include "yoinks/http_server.hpp"
 #include "yoinks/chunked_stream_writer.hpp"
-#include "yoinks/stream_session_registry.hpp"
+#include "yoinks/lazy_stream_session_registry.hpp"
 #include "yoinks/youtube_url.hpp"
 
 #include <boost/asio.hpp>
@@ -89,7 +89,8 @@ http::response<http::string_body> response(
 
 http::response<http::string_body> handle(
         const http::request<http::string_body>& request,
-        const std::string& configured_token) {
+        const std::string& configured_token,
+        const std::shared_ptr<YoutubeQueueService>& queue_service) {
     const auto target = request.target();
     if (request.method() == http::verb::get && target == "/api/v1/health") {
         return response(http::status::ok,
@@ -135,11 +136,22 @@ http::response<http::string_body> handle(
                     R"({"success":false,"error":{"code":"invalid_mode","message":"Unsupported playback mode"}})",
                     request.version());
         }
-        // Deliberately fail closed until resolver, HTTP relay and MPD queue manager
-        // are implemented. Never claim that an item was queued when it was not.
-        return response(http::status::service_unavailable,
-                R"({"success":false,"error":{"code":"backend_not_ready","message":"Playback backend is not ready"}})",
-                request.version());
+        if (!queue_service) {
+            return response(http::status::service_unavailable,
+                    R"({"success":false,"error":{"code":"backend_not_ready","message":"Playback backend is not configured"}})",
+                    request.version());
+        }
+        const auto queued = queue_service->enqueue(youtube_url, mode == "play_now");
+        Json result;
+        result["success"] = queued.success;
+        result["queued"] = queued.queued;
+        result["rollback_complete"] = queued.rollback_complete;
+        if (!queued.success) {
+            result["error"] = {{"code", queued.error_code},
+                               {"message", "YouTube queue request could not be completed"}};
+        }
+        return response(queued.success ? http::status::ok : http::status::bad_gateway,
+                result.dump(), request.version());
     }
 
     return response(http::status::not_found,
@@ -169,14 +181,28 @@ bool validStreamId(const std::string& id) {
 }
 
 void serveStream(beast::tcp_stream& stream, const std::string& id,
-                 const std::shared_ptr<StreamSessionRegistry>& sessions) {
-    const auto upstream = sessions->find(id);
+                 const std::shared_ptr<LazyStreamSessionRegistry>& sessions,
+                 const std::shared_ptr<YtDlpResolver>& resolver) {
     beast::error_code error;
-    if (!upstream) {
-        auto reply = response(http::status::not_found,
-            R"({"success":false,"error":{"code":"stream_not_found","message":"Stream session not found"}})", 11);
+    if (!sessions || !resolver || !sessions->activate(id,
+            [resolver](const std::string& video_id, std::string& source_url,
+                       const std::atomic_bool* cancellation) {
+                return resolver->resolveAudioUrl(video_id, source_url, cancellation);
+            })) {
+        auto reply = response(http::status::bad_gateway,
+            R"({"success":false,"error":{"code":"stream_activation_failed","message":"Unable to activate media stream"}})", 11);
         stream.expires_after(std::chrono::seconds(5));
         http::write(stream, reply, error);
+        if (sessions) sessions->erase(id);
+        return;
+    }
+    const auto upstream = sessions->findActive(id);
+    if (!upstream) {
+        auto reply = response(http::status::bad_gateway,
+            R"({"success":false,"error":{"code":"stream_unavailable","message":"Media stream is unavailable"}})", 11);
+        stream.expires_after(std::chrono::seconds(5));
+        http::write(stream, reply, error);
+        sessions->erase(id);
         return;
     }
     http::response<http::empty_body> header{http::status::ok, 11};
@@ -205,7 +231,9 @@ void serveStream(beast::tcp_stream& stream, const std::string& id,
 }
 
 bool serveConnection(tcp::socket socket, const std::string& token,
-                     const std::shared_ptr<StreamSessionRegistry>& sessions,
+                     const std::shared_ptr<LazyStreamSessionRegistry>& sessions,
+                     const std::shared_ptr<YtDlpResolver>& resolver,
+                     const std::shared_ptr<YoutubeQueueService>& queue_service,
                      const std::shared_ptr<std::atomic<std::size_t>>& active_streams,
                      asio::thread_pool& stream_workers,
                      const std::shared_ptr<std::atomic<std::size_t>>& active_connections) {
@@ -260,10 +288,10 @@ bool serveConnection(tcp::socket socket, const std::string& token,
         } else {
             try {
                 asio::post(stream_workers,
-                    [stream = std::move(stream), id, sessions, active_streams,
+                    [stream = std::move(stream), id, sessions, resolver, active_streams,
                      active_connections]() mutable {
                         beast::error_code stream_error;
-                        try { serveStream(stream, id, sessions); }
+                        try { serveStream(stream, id, sessions, resolver); }
                         catch (...) { sessions->erase(id); }
                         stream.socket().shutdown(tcp::socket::shutdown_both, stream_error);
                         stream.socket().close(stream_error);
@@ -281,7 +309,7 @@ bool serveConnection(tcp::socket socket, const std::string& token,
         stream.socket().close(error);
         return false;
     }
-    auto reply = handle(request, token);
+    auto reply = handle(request, token, queue_service);
     stream.expires_after(std::chrono::seconds(5));
     http::write(stream, reply, error);
     stream.socket().shutdown(tcp::socket::shutdown_both, error);
@@ -307,7 +335,10 @@ void HttpServer::run() {
     asio::thread_pool stream_workers{2};
     auto active_connections = std::make_shared<std::atomic<std::size_t>>(0);
     auto active_streams = std::make_shared<std::atomic<std::size_t>>(0);
-    auto sessions = std::make_shared<StreamSessionRegistry>();
+    auto sessions = config_.sessions;
+    if (!sessions || !config_.resolver || !config_.queue_service) {
+        throw std::invalid_argument("YouTube resolver, lazy sessions and queue service are required");
+    }
     const auto address = asio::ip::make_address(config_.bind_address);
     if (!address.is_loopback()) {
         throw std::invalid_argument(
@@ -344,12 +375,14 @@ void HttpServer::run() {
                         asio::post(workers, [socket = std::move(*socket),
                                              token = config_.bearer_token,
                                              active_connections, active_streams, sessions,
+                                             resolver = config_.resolver,
+                                             queue_service = config_.queue_service,
                                              &stream_workers]() mutable {
                             bool handed_off = false;
                             try {
                                 handed_off = serveConnection(std::move(socket), token,
-                                    sessions, active_streams, stream_workers,
-                                    active_connections);
+                                    sessions, resolver, queue_service, active_streams,
+                                    stream_workers, active_connections);
                             } catch (...) {
                                 // A malformed client must not terminate a worker or expose details.
                             }
