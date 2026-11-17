@@ -672,4 +672,4 @@ Serwer ma stałą pulę czterech wątków i limit 16 zaakceptowanych/zleconych p
 
 ## Aktualizacja — rejestr sesji strumieniowych (2026-11-17)
 
-Dodano `StreamSessionRegistry`: domyślnie maksymalnie cztery sesje, konfiguracyjny limit maksymalny 32. Każda sesja utrzymuje pojedynczy producent HTTPS i bufor o stałej pojemności. Identyfikatory sesji są generowane przez systemowy `getrandom(2)` (128 bitów), bez ujawniania adresów CDN. Dodano testy odrzucania nieprawidłowych źródeł, nieznanych identyfikatorów i nadmiernego limitu sesji. Rejestr nie jest jeszcze połączony z endpointem strumieniowym ani API kolejki.
+Dodano `StreamSessionRegistry`: domyślnie maksymalnie cztery sesje, konfiguracyjny limit maksymalny 32. Każda sesja utrzymuje pojedynczy producent HTTPS i bufor o stałej pojemności; łączna alokacja buforów wszystkich sesji ma twardy limit 8 MiB. Identyfikatory sesji są generowane przez systemowy `getrandom(2)` (128 bitów), bez ujawniania adresów CDN. Dodano testy odrzucania nieprawidłowych źródeł, nieznanych identyfikatorów i nadmiernego limitu sesji. Rejestr nie jest jeszcze połączony z endpointem strumieniowym ani API kolejki.
