@@ -180,3 +180,14 @@ All six reported cases passed: binary FIFO transfer and cleanup; playlist reject
 - Scope limitation: the barrier explicitly counts `activate()` operations. The owner must stop dispatching other public registry operations before destroying the object. The HTTP server retains shared ownership while stream workers are joined. The test uses an explicit `shutdown()` barrier and does not attempt the invalid C++ pattern of destroying an object concurrently with a method call through a raw reference.
 - No sanitizer run, live YouTube/CDN retrieval, audible hardware validation, RAM-only/no-persistent-storage validation, production binary installation, or service restart was performed. No production MPD queue/playback state was changed.
 
+
+
+## Verification addendum — shutdown races with registry mutations (2026-11-17)
+
+- Added `testShutdownSerializesWithConcurrentRegistryMutations()` in commit `63bf4b8aaba114a56949f4d3424ce472e9147eb3`.
+- The deterministic test runs an activation paused after upstream start and before publication, then races shutdown with each of `release(id, true)`, `erase(id)`, `clear()`, and `retainOnly({id})`.
+- For each case it verifies that shutdown closes session creation, the in-flight activation is cancelled, shutdown returns, and no sessions or active slots remain. The registry remains alive until all participating threads have joined; the test does not perform concurrent destruction through an invalid raw-reference lifetime.
+- GitHub Actions run `44122267302` for the exact commit `63bf4b8aaba114a56949f4d3424ce472e9147eb3` completed successfully; the `build-and-test` job passed. The preceding intermediate test commit `5d6d7dd5` also passed run `44122205972`.
+- User-reported Raspberry Pi verification for `63bf4b8a`: CMake build succeeded, the targeted lazy-session executable reported `All lazy stream session tests passed`, and full CTest passed **11/11** in 5.36 seconds. `git status --short` was empty.
+- This closes the targeted deterministic shutdown-versus-mutation test gate. It does not prove arbitrary concurrent destruction or provide a general guard for every public registry method. The owner-side quiescence and shared-ownership contract remains required.
+- No sanitizer run, live YouTube/CDN retrieval, audible hardware validation, persistent-storage/swap trace, production binary installation, service restart, or production MPD queue/playback change is claimed.
