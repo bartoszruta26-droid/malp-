@@ -29,6 +29,7 @@ Instalator:
 Opcje:
 
 - `--no-start` — instaluje i włącza jednostkę, ale nie uruchamia jej w tej operacji.
+- `--restart` — jawnie restartuje już działającą usługę; może przerwać aktualny strumień. Bez tej opcji ponowna instalacja pozostawia aktywną usługę bez restartu.
 - `--check-youtube` — wykonuje dodatkowy test pobrania samych metadanych jednego filmu; nie pobiera audio.
 - `--help` — wyświetla pomoc.
 
