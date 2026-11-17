@@ -19,11 +19,14 @@ This directory is the working area for implementation, audits, test evidence, an
 7. Preserve normal MPD queues and controls. Do not clear queues or change global single/consume modes.
 8. Never claim a build, test, or hardware validation passed unless evidence is recorded.
 
-## Main audit\n\n- [Professional architecture audit and implementation plan](AUDYT_ARCHITEKTURY_I_PLAN_REALIZACJI.md) — current-state findings, target architecture, security, RAM-only controls, acceptance tests, risks, and staged delivery plan.\n\n## Work stages
+## Main audit
+
+- [Professional architecture audit and implementation plan](AUDYT_ARCHITEKTURY_I_PLAN_REALIZACJI.md) — current-state findings, target architecture, security, RAM-only controls, acceptance tests, risks, and staged delivery plan.
+- [Control API contract v1](../../docs/yoinks-mpd/API_CONTRACT_V1.md) — authenticated queue API, request/response schema, queue semantics, errors and media endpoint contract.\n\n## Work stages
 
 - [x] W0 — Confirm HTTP proxy as the sole transport; remove named-pipe producer and tests.
 - [ ] W1 — Verify CURL input and real HTTP playback on the exact Raspberry Pi MPD build (hardware evidence pending).
-- [ ] W2 — Define the authenticated API contract and security limits.
+- [x] W2 — Define the authenticated API contract and security limits (specification created; implementation remains open).
 - [ ] W3 — Build the Raspberry Pi C++ service skeleton.
 - [ ] W4 — Implement yt-dlp metadata resolution and playlist expansion without media downloads.
 - [ ] W5 — Implement the stable local HTTP relay with bounded RAM buffers and back-pressure.
@@ -45,7 +48,7 @@ Repository-side inspection is not a substitute for compiling or running the serv
 
 ## Current known risks
 
-- The Android client expects `POST /api/v1/resolve`, but the Pi installer previously supplied only an unrelated producer prototype. The producer has now been removed; the HTTP service remains to be implemented.
+- The Android client still expects `POST /api/v1/resolve` and must be migrated to the specified `POST /api/v1/queue` contract before server integration.
 - The bridge media transport is HTTP proxy only; do not add pipe, named-pipe, local-file or file-cache paths.
 - The agreed architecture uses a local HTTP streaming endpoint and requires MPD CURL input support on the exact target build.
 - The existing Android share path was previously incomplete; re-audit current source before editing.
@@ -57,4 +60,5 @@ Repository-side inspection is not a substitute for compiling or running the serv
 - W0 correction completed: HTTP proxy + MPD CURL input is the sole target; the legacy named-pipe producer and tests were removed.
 - Added a read-only Raspberry Pi diagnostic: `scripts/yoinks-mpd/diagnose-mpd-http.sh`.
 - Added the procedure: `docs/yoinks-mpd/MPD_HTTP_INPUT_DIAGNOSTIC.md`.
-- W1 remains **blocked pending target-device evidence**. The diagnostic script has not been run on the Raspberry Pi in this environment, and no successful HTTP playback is claimed.
+- W1 remains **open pending target-device evidence**. The diagnostic script has not been run on the Raspberry Pi in this environment, and no successful HTTP playback is claimed.
+- W2 API contract v1 was added at `docs/yoinks-mpd/API_CONTRACT_V1.md`; this is a specification only, not a running API.
