@@ -101,8 +101,8 @@ void testInvalidUserUrlIsRejectedBeforeSpawn() {
 
 void testClosedStandardDescriptorsDoNotBreakSpawn() {
     TemporaryExecutable executable(
-        "#!/bin/sh\\n"
-        "printf '%s\\n' '{\"id\":\"qqAYW7uxErI\",\"title\":\"closed-fd fixture\"}'\\n");
+        "#!/bin/sh\n"
+        "printf '%s\n' '{\"id\":\"qqAYW7uxErI\",\"title\":\"closed-fd fixture\"}'\n");
     const pid_t child = fork();
     require(child >= 0, "fork should succeed for closed-descriptor test");
     if (child == 0) {
