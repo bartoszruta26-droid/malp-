@@ -368,11 +368,6 @@ MpdPlaylistStateSnapshot MpdQueueManager::listPlaylistState() const {
     }
     if (!finish_entry()) { result.error_code = "mpd_playlist_entry_invalid"; return result; }
 
-    const auto status = command(stream, buffer, "status", deadline, 128, 16384);
-    if (!status.success) {
-        result.error_code = status.rejected ? "mpd_status_rejected" : "mpd_status_failed";
-        return result;
-    }
     bool have_state = false;
     for (const auto& line : status.lines) {
         constexpr char state_prefix[] = "state: ";
