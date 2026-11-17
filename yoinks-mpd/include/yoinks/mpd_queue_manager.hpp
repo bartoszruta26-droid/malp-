@@ -32,12 +32,19 @@ struct MpdQueueResult {
  * or changes repeat/random/single/consume. play_now starts the first newly
  * added song only when explicitly requested.
  */
+struct MpdQueueSnapshot {
+    bool success{false};
+    std::vector<std::string> stream_session_ids;
+    std::string error_code;
+};
+
 class MpdQueueManager final {
 public:
     explicit MpdQueueManager(MpdQueueManagerConfig config = {});
 
     MpdQueueResult enqueue(const std::vector<std::string>& stream_uris,
                            bool play_now) const;
+    MpdQueueSnapshot listStreamSessionIds() const;
 
     bool isAllowedStreamUri(const std::string& uri) const;
 
