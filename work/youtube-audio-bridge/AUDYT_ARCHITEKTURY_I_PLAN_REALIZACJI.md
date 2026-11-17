@@ -655,3 +655,11 @@ Dodano test integracyjny uruchamiający proces i sprawdzający health, 401, 400,
 ## Uzupełnienie — walidacja adresu po stronie serwera
 
 Control API waliduje URL niezależnie od Androida: HTTPS, dokładną allowlistę hostów, brak userinfo i fragmentu oraz identyfikatory filmu/playlisty i ścieżki. Dodano przypadek integracyjny odrzucający host podobny do YouTube kodem 422. Testy nadal oczekują na wykonanie przez CI.
+
+
+
+## Aktualizacja — producent strumienia HTTPS do bufora RAM (2026-11-17)
+
+Dodano `HttpUpstreamStream` (C++17/libcurl): walidację URL źródłowego, wyłącznie HTTPS i hosty w granicy domeny `googlevideo.com`, port 443, zakaz userinfo, weryfikację TLS, brak automatycznych przekierowań, timeout połączenia i limit niskiej prędkości. Dane są zapisywane callbackiem bezpośrednio do stałego bufora RAM o domyślnej pojemności 256 KiB; back-pressure blokuje producenta, limit danych sesji wynosi 512 MiB. Anulowanie czyści bufor i odblokowuje producenta. Dodano testy allowlisty i błędnego startu bez dostępu do sieci.
+
+To nadal wyłącznie komponent upstream → RAM. Brakuje stabilnego rejestru sesji, lokalnego endpointu HTTP z odpowiedzią strumieniowaną/chunked, kontroli zakresów/HEAD według rzeczywistego zachowania MPD oraz testów odtwarzania. Nie wolno oznaczać proxy ani całego mostu jako gotowego.
