@@ -33,3 +33,8 @@ ctest --test-dir yoinks-mpd/build --output-on-failure
 - MPD CURL compatibility and real device playback.
 
 Do not expose this core as a working bridge until these components and integration tests exist. The only permitted media transport remains the local HTTP proxy. No FIFO, named pipes, media files or disk-backed cache are part of this implementation.
+
+
+## HTTP API bootstrap status
+
+A minimal Boost.Beast HTTP server is now built as `yoinks-mpd`. It exposes an unauthenticated health endpoint and a Bearer-protected queue endpoint that intentionally returns HTTP 503 until the resolver, HTTP media relay and MPD queue manager are integrated. The server enforces a 16 KiB request-body limit, an 8 KiB header limit and socket read/write deadlines. It binds to loopback by default. This is a development bootstrap, not a deployable bridge: it is synchronous, single-connection-at-a-time, has no TLS termination and does not yet enqueue media.
