@@ -219,3 +219,13 @@ All six reported cases passed: binary FIFO transfer and cleanup; playlist reject
 - Added a 120-second per-test CTest timeout to both normal and sanitizer suites and a 30-minute job timeout. This prevents a hung regression test from occupying a runner indefinitely and preserves diagnostic failure reporting.
 - The new watchdog configuration is a CI-only change. It does not alter runtime behavior or the production service. Its own workflow run must pass before the revised workflow is considered verified.
 - Raspberry Pi sanitizer execution remains blocked until a completed CI run confirms the exact stress-test revision. No production installation or restart occurred.
+
+
+## DNS/SSRF review — findings pending remediation (2026-11-17)
+
+- Reviewed `yoinks-mpd/src/http_upstream_stream.cpp` and `yoinks-mpd/tests/http_upstream_stream_test.cpp`.
+- The URL parser enforces HTTPS, rejects URL userinfo, restricts explicit port to 443, and allows only the exact `googlevideo.com` domain or a dot-delimited subdomain. Redirect following is disabled and TLS peer/hostname verification is enabled.
+- The current policy validates the URL hostname but does not validate the destination IP address selected by DNS. A permitted CDN hostname resolving to loopback, private, link-local, multicast, or otherwise non-public address space is therefore not explicitly rejected by this layer. This is a defense-in-depth SSRF gap; DNS resolution and the actual connected peer need to be checked.
+- Do not implement a hostname-only workaround or disable TLS verification. The remediation design must validate every resolved address and ensure the connection uses only an address that passed validation, while preserving the original hostname for SNI and certificate verification. IPv4, IPv6, IPv4-mapped IPv6, special-purpose ranges, multiple A/AAAA answers, and DNS rebinding must be considered.
+- Existing integration tests intentionally use a loopback TLS fixture through the test-only `CURLOPT_CONNECT_TO` override. Any production address policy must make this test override explicitly test-only and must not create a production bypass.
+- No DNS/SSRF code change has been made yet. The next work is a test-first design and adversarial resolver/connection tests.
