@@ -26,6 +26,7 @@ struct YoutubeQueueServiceConfig {
 
 struct YoutubeQueueServiceResult {
     bool success{false};
+    bool started{false};
     bool rollback_complete{true};
     std::size_t queued{0};
     std::string error_code;
