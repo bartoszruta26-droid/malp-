@@ -5,14 +5,22 @@ binary="$1"
 port=18787
 token="test-token-with-at-least-256-bits-of-entropy-123456789"
 log_file="$(mktemp)"
-YOINKS_MPD_TOKEN="$token" YOINKS_MPD_PORT="$port" "$binary" > /dev/null 2>"$log_file" &
+resolver_file="$(mktemp)"
+cat >"$resolver_file" <<'RESOLVER'
+#!/bin/sh
+printf '%s\\n' '{"id":"qqAYW7uxErI","title":"HTTP integration fixture","duration":1}'
+RESOLVER
+chmod 700 "$resolver_file"
+YOINKS_MPD_TOKEN="$token" YOINKS_MPD_PORT="$port" \
+YOINKS_MPD_MPD_PORT=1 YOINKS_MPD_YTDLP="$resolver_file" \
+    "$binary" > /dev/null 2>"$log_file" &
 server_pid=$!
 cleanup() {
     if [[ -n "$server_pid" ]]; then
         kill "$server_pid" 2>/dev/null || true
         wait "$server_pid" 2>/dev/null || true
     fi
-    rm -f "$log_file"
+    rm -f "$log_file" "$resolver_file"
 }
 trap cleanup EXIT
 
@@ -69,8 +77,8 @@ invalid_url_status="$(curl --silent -o /dev/null -w '%{http_code}' \
     "http://127.0.0.1:$port/api/v1/queue")"
 [[ "$invalid_url_status" == "422" ]]
 
-# Queue processing is now connected. Without a configured yt-dlp/MPD test backend,
-# a valid request must fail as an upstream/backend error, never as a false success.
+# A deterministic yt-dlp fixture supplies metadata; MPD port 1 is deliberately closed.
+# The HTTP path must therefore reach the MPD adapter and report failure, never false success.
 test_video_status="$(curl --silent -o /dev/null -w '%{http_code}' \
     -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
     -d '{"url":"https://www.youtube.com/watch?v=qqAYW7uxErI","mode":"enqueue"}' \
