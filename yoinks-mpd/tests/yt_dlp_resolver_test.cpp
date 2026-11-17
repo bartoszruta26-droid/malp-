@@ -15,6 +15,7 @@
 #include <string>
 #include <thread>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 namespace {
@@ -97,6 +98,29 @@ void testInvalidUserUrlIsRejectedBeforeSpawn() {
             "lookalike YouTube host must fail before spawning yt-dlp");
 }
 
+
+void testClosedStandardDescriptorsDoNotBreakSpawn() {
+    TemporaryExecutable executable(
+        "#!/bin/sh\\n"
+        "printf '%s\\n' '{\"id\":\"qqAYW7uxErI\",\"title\":\"closed-fd fixture\"}'\\n");
+    const pid_t child = fork();
+    require(child >= 0, "fork should succeed for closed-descriptor test");
+    if (child == 0) {
+        close(STDIN_FILENO);
+        close(STDOUT_FILENO);
+        close(STDERR_FILENO);
+        yoinks::YtDlpResolverConfig config;
+        config.executable = executable.path();
+        yoinks::YtDlpResolver resolver(config);
+        const auto result = resolver.resolveMetadata(
+                "https://www.youtube.com/watch?v=qqAYW7uxErI");
+        _exit(result.success && result.entries.size() == 1 ? 0 : 1);
+    }
+    int status = 0;
+    while (waitpid(child, &status, 0) < 0 && errno == EINTR) {}
+    require(WIFEXITED(status) && WEXITSTATUS(status) == 0,
+            "resolver spawn must work when parent standard descriptors are closed");
+}
 void testProcessTimeoutIsEnforced() {
     TemporaryExecutable executable("#!/bin/sh\nsleep 2\n");
     yoinks::YtDlpResolverConfig config;
@@ -148,6 +172,7 @@ int main() {
         testMetadataPlaylistIsParsedWithoutMediaDownload();
         testAudioUrlMustBeAllowedCdnUrl();
         testInvalidUserUrlIsRejectedBeforeSpawn();
+        testClosedStandardDescriptorsDoNotBreakSpawn();
         testProcessTimeoutIsEnforced();
         testCancellationTerminatesProcessGroup();
         testStdoutLimitIsEnforced();
