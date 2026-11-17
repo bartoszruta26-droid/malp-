@@ -119,7 +119,9 @@ void testReleaseCancelsInFlightActivationAndAllowsFreshRetry() {
                 std::unique_lock<std::mutex> lock(mutex);
                 resolver_entered = true;
                 condition.notify_all();
-                condition.wait(lock, [&] { return cancellation->load(); });
+                while (!cancellation->load()) {
+                    condition.wait_for(lock, std::chrono::milliseconds(1));
+                }
                 resolver_observed_cancel = true;
                 condition.notify_all();
                 condition.wait(lock, [&] { return allow_resolver_to_finish; });
