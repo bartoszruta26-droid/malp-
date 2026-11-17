@@ -181,3 +181,11 @@ Niniejsza sekcja jest nadrzędna wobec wcześniejszych fragmentów tego dokument
 - Testy obejmują odczyt playlisty MPD, filtrowanie lokalnych URI, usuwanie nieaktualnych capability, zachowanie sesji aktywnych, fail-closed przy błędzie snapshotu i ponowienie nieudanej aktywacji.
 - Potwierdzony przebieg CI przed ostatnimi zmianami limitu aktywnych czytelników i limitów czasu: run `44062367873` — build i CTest `success`. Przebiegi dla kolejnych zmian należy sprawdzić po ich zakończeniu.
 - Sesje usunięte z MPD są sprzątane przy kolejnym żądaniu kolejki; nie ma jeszcze osobnego demona monitorującego zmiany MPD. Pełna weryfikacja replay/reconnect na rzeczywistym MPD/CURL pozostaje wymagana.
+
+
+### Dostęp Androida przez HTTPS
+
+- Klient Androida i ustawienia Bridge wymagają obecnie adresu `https://`; zwykły HTTP jest odrzucany, ponieważ żądania zawierają token Bearer.
+- Serwer Yoinks-MPD nadal nasłuchuje wyłącznie na `127.0.0.1:8788`. Nie wolno wystawiać tego portu bezpośrednio do sieci LAN/Internetu.
+- Dodano przykład `deploy/nginx/yoinks-mpd-https.conf.example`: TLS 1.2/1.3, przekazanie API do loopback, wyłączenie buforowania i plików tymczasowych Nginx oraz blokada zdalnego dostępu do `/stream/` (ten endpoint jest przeznaczony wyłącznie dla lokalnego MPD).
+- Przykład wymaga podstawienia rzeczywistej nazwy hosta i certyfikatu TLS. Nie został wdrożony ani przetestowany na Raspberry Pi. Instalator nadal nie konfiguruje Nginx, certyfikatu ani usługi systemd.
