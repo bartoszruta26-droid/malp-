@@ -35,10 +35,10 @@ void testProgressiveChunkFramingAndSuccessfulEof() {
         });
     require(completed, "successful upstream must complete chunk writer");
     require(offset == payload.size(), "reader must be consumed progressively");
-    require(wire.compare(0, 7, "4000\\r\\n") == 0,
+    require(wire.compare(0, 7, "4000\r\n") == 0,
             "first chunk must be capped at 16 KiB");
     require(wire.size() > payload.size(), "wire output must include chunk framing");
-    require(wire.compare(wire.size() - 5, 5, "0\\r\\n\\r\\n") == 0,
+    require(wire.compare(wire.size() - 5, 5, "0\r\n\r\n") == 0,
             "successful upstream must emit exactly the terminal chunk");
 }
 
@@ -60,7 +60,7 @@ void testFailedUpstreamDoesNotEmitSuccessfulEof() {
             return true;
         });
     require(!completed, "failed upstream must not be reported as complete");
-    require(wire.find("0\\r\\n\\r\\n") == std::string::npos,
+    require(wire.find("0\r\n\r\n") == std::string::npos,
             "failed upstream must not emit a terminal chunk");
 }
 
@@ -92,10 +92,10 @@ int main() {
         testProgressiveChunkFramingAndSuccessfulEof();
         testFailedUpstreamDoesNotEmitSuccessfulEof();
         testSocketWriteFailureStopsImmediately();
-        std::cout << "All chunked stream writer tests passed\\n";
+        std::cout << "All chunked stream writer tests passed\n";
         return 0;
     } catch (const std::exception& error) {
-        std::cerr << "Test failure: " << error.what() << '\\n';
+        std::cerr << "Test failure: " << error.what() << '\n';
         return 1;
     }
 }
