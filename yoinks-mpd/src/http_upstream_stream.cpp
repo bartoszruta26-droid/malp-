@@ -74,6 +74,10 @@ HttpUpstreamStream::~HttpUpstreamStream() {
     wait();
 }
 
+bool HttpUpstreamStream::isAllowedResolvedUrl(const std::string& value) {
+    return validResolvedUrl(value);
+}
+
 bool HttpUpstreamStream::start(const std::string& resolved_https_url) {
     UpstreamState expected = UpstreamState::idle;
     if (!state_.compare_exchange_strong(expected, UpstreamState::running)) {
