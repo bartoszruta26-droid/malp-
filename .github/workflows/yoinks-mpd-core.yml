@@ -1,0 +1,24 @@
+name: Yoinks-MPD C++ core
+
+on:
+  push:
+    paths:
+      - "yoinks-mpd/**"
+      - ".github/workflows/yoinks-mpd-core.yml"
+  pull_request:
+    paths:
+      - "yoinks-mpd/**"
+      - ".github/workflows/yoinks-mpd-core.yml"
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S yoinks-mpd -B yoinks-mpd/build -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build yoinks-mpd/build --parallel 2
+      - name: Test
+        run: ctest --test-dir yoinks-mpd/build --output-on-failure
