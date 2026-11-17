@@ -22,6 +22,7 @@ struct YoutubeQueueServiceConfig {
     std::shared_ptr<LazyStreamSessionRegistry> sessions;
     std::function<MetadataResult(const std::string&)> resolve_metadata;
     std::function<MpdQueueResult(const std::vector<std::string>&, bool)> enqueue;
+    std::function<bool(std::vector<std::string>&)> queued_session_ids;
 };
 
 struct YoutubeQueueServiceResult {
