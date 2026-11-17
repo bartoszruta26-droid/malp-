@@ -104,4 +104,8 @@ if(YOINKS_MPD_BUILD_TESTS)
     add_test(NAME http_stream_byte_integration
         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/http_stream_test.sh
             $<TARGET_FILE:yoinks_mpd_http_stream_fixture> $<TARGET_FILE:yoinks_mpd_mock_mpd>)
+    add_test(NAME real_mpd_http_proxy_playback
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/http_mpd_daemon_test.sh
+            $<TARGET_FILE:yoinks_mpd_http_stream_fixture>)
+    set_tests_properties(real_mpd_http_proxy_playback PROPERTIES TIMEOUT 45)
 endif()
