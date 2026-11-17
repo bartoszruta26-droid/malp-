@@ -135,4 +135,4 @@ Serwer HTTP korzysta obecnie ze stałej puli czterech wątków i ogranicza liczb
 
 ## Rejestr sesji strumieniowych — komponent wewnętrzny
 
-Dodano `StreamSessionRegistry`: domyślnie maksymalnie cztery sesje (twardy limit konfiguracji 32). Każda sesja posiada jeden producent HTTPS i stały bufor RAM. Identyfikatory sesji mają 128 bitów losowości z systemowego `getrandom(2)`, są kodowane jako 32 znaki szesnastkowe. Rejestr obsługuje wyszukiwanie, anulowanie, usuwanie i czyszczenie. Nie jest jeszcze podłączony do endpointu MPD ani API kolejki; nie generuje obecnie URI do odtwarzania.
+Dodano `StreamSessionRegistry`: domyślnie maksymalnie cztery sesje (twardy limit konfiguracji 32). Każda sesja posiada jeden producent HTTPS i stały bufor RAM; łączna alokacja buforów jest ograniczona do 8 MiB. Identyfikatory sesji mają 128 bitów losowości z systemowego `getrandom(2)`, są kodowane jako 32 znaki szesnastkowe. Rejestr obsługuje wyszukiwanie, anulowanie, usuwanie i czyszczenie. Nie jest jeszcze podłączony do endpointu MPD ani API kolejki; nie generuje obecnie URI do odtwarzania.
