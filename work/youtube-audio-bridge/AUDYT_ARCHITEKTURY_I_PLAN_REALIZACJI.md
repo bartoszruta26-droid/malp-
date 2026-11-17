@@ -935,3 +935,12 @@ Niniejsza sekcja jest nadrzędna wobec wcześniejszych fragmentów tego dokument
 - Drugie równoległe żądanie dla sesji, która jest już aktywowana, nie usuwa i nie anuluje pierwszego żądania.
 - Test HTTP z atrapą `yt-dlp` i zamkniętym portem MPD przechodzi przez walidację, resolver i adapter kolejki, a następnie oczekuje kontrolowanego HTTP 502 z MPD. Testy jednostkowe obejmują również odróżnianie stanu sesji i semantykę `play_now`.
 - Potwierdzony przebieg CI dla obsługi sesji i testów HTTP: `44060542148` — `success` (build oraz CTest). Nowszy przebieg po rozszerzeniu testu `play_now` należy sprawdzić oddzielnie.
+
+
+### Semantyka `play_now` i kody błędów HTTP — aktualizacja
+
+- Tryb `play_now` wstawia nową playlistę jako spójny blok przed istniejącą kolejką MPD: pozycje są dodawane komendą `addid "URI" 0` w odwrotnej kolejności, aby zachować kolejność źródłową, a następnie uruchamiana jest pierwsza pozycja przez jej song ID. Istniejące pozycje pozostają w kolejce.
+- Tryb `enqueue` nadal wykonuje wyłącznie kolejne `addid` bez zmiany bieżącego odtwarzania.
+- Test mock MPD sprawdza kolejność komend wstawiania oraz to, że `playid` wskazuje pierwszy element żądanej playlisty. Przebieg CI `44060885397` zakończył się `success` (build i CTest).
+- Statusy API rozróżniają niedostępny MPD/limit sesji (503), timeout resolvera (504), pustą lub nieobsługiwaną playlistę (422) oraz pozostałe błędy upstream (502).
+- Najnowsze zmiany statusów HTTP wymagają zakończenia workflow `44060955448`; do tego czasu nie deklarować ich jako potwierdzonych.
