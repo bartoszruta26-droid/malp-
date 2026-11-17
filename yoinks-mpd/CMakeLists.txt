@@ -15,6 +15,7 @@ add_library(yoinks_mpd_core
     src/http_server.cpp
     src/http_upstream_stream.cpp
     src/stream_session_registry.cpp
+    src/yt_dlp_resolver.cpp
 )
 target_include_directories(yoinks_mpd_core PUBLIC include ${Boost_INCLUDE_DIRS})
 target_compile_definitions(yoinks_mpd_core PUBLIC BOOST_ERROR_CODE_HEADER_ONLY)
