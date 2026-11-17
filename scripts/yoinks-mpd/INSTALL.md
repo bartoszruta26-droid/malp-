@@ -95,3 +95,16 @@ To test integracyjny, a nie test instalacyjny. Nie uruchamia się automatycznie 
 - Zewnętrzny klient Android nie połączy się bezpośrednio z adresem loopback Raspberry Pi. Do dostępu zdalnego potrzebny jest odrębny, zabezpieczony kanał TLS.
 
 Instalacja usługi nie oznacza gotowości produkcyjnej. Przed użyciem zdalnym należy przeprowadzić test MPD/CURL na docelowym urządzeniu, test TLS oraz test odtwarzania end-to-end.
+
+
+## Opcjonalny obserwator playlisty MPD
+
+W pliku `/etc/yoinks-mpd/yoinks-mpd.env` można jawnie ustawić:
+
+```bash
+YOINKS_MPD_PLAYLIST_WATCH=false
+```
+
+Domyślnie obserwator jest wyłączony. Wartość `true` uruchamia w procesie Yoinks-MPD dodatkowe, odczytowe połączenie `idle playlist` do MPD. Obserwator pobiera snapshot playlisty i zapisuje w dzienniku wyłącznie liczbę pozycji, stan odtwarzacza oraz kody błędów. Nie konwertuje adresów YouTube, nie modyfikuje kolejki i nie uruchamia odtwarzania.
+
+**Nie włączać tej opcji na działającym Raspberry Pi jako etapu wdrożenia.** Nadal wymagane są testy cyklu życia i ponownego łączenia oraz kontrolowany test akceptacji surowego URI YouTube na odizolowanym MPD. Zmiana pliku środowiskowego wymaga kontrolowanego restartu usługi, który może przerwać bieżący strumień.

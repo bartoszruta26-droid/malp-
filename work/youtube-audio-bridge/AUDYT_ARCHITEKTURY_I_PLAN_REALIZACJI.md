@@ -1186,3 +1186,13 @@ Dodano testy protokołu dla zdarzenia playlisty, zdarzenia niezwiązanego z play
 - Nowy etap wymaga odrębnego CI. Testy cyklu życia i reconnect watchera oraz bezpieczna akceptacja surowego URL przez docelowy MPD nadal pozostają otwarte. Nie uruchamiać opcji na Raspberry Pi przed potwierdzeniem CI i kontrolowanym teście.
 
 - Integracja kodowa zapisana w commitach: konfiguracja `cba943c8`, konfiguracja startowa `3011df5c`, worker `baf9a4fc`, audyt `0ceb1f4a`, utwardzenie i formatowanie workera `68223057` oraz `cdc9e4f2`. CI dla aktualnego HEAD `cdc9e4f284aef5996697fa4ee5d298e833025fb6` — run `44152468292`, oczekuje na wynik.
+
+
+## Kontrola CI i dokumentacji obserwatora — 2026-11-17 (kontynuacja)
+
+- Branch `feature/youtube-audio-bridge` został ponownie odczytany z GitHub; HEAD pozostaje `6b5f23ccaaf699fc67cf539199e2162b900410ea`.
+- Workflow run `44152518535` dla tego dokładnego SHA zakończył się `success`. Wszystkie kroki build, CTest oraz ASan/UBSan zakończyły się powodzeniem.
+- Przegląd kodu potwierdził, że obserwator jest opcjonalny, domyślnie wyłączony, używa osobnego połączenia `idle playlist`, a snapshot wykonuje przez istniejący menedżer MPD. Nie wykonuje mutacji ani playback.
+- Dodano test ograniczenia czasu subskrypcji `idle`: brak odpowiedzi po przyjęciu komendy musi być raportowany jako normalny timeout, bez kodu błędu transportowego.
+- Zaktualizowano README i instrukcję instalacji, aby opisywały aktualny stan obserwatora oraz domyślne wyłączenie. Wcześniejsza informacja w README o braku implementacji obserwatora była nieaktualna.
+- Nadal otwarte: test cyklu życia workera w pełnym serwerze, deterministyczne testy reconnect/backoff, kontrolowana akceptacja surowego URL YouTube przez docelowy MPD oraz implementacja konwersji wyłącznie przyszłych pozycji. Brak zgody na włączenie workera na urządzeniu produkcyjnym lub zmianę kolejki.
