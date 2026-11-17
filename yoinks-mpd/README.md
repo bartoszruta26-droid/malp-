@@ -66,3 +66,8 @@ Added `StreamSessionRegistry` with a default maximum of four sessions (hard cap 
 ## Local HTTP stream endpoint — current limitations
 
 `GET /stream/{32-char-lowercase-hex-id}` looks up an existing trusted in-memory session and streams its upstream bytes using HTTP/1.1 chunked transfer encoding. Unknown IDs return 404; unsupported methods return 405; Range returns 501 with `Accept-Ranges: none`. At most two streams run concurrently in the dedicated stream pool. The current integration tests cover route rejection and unknown sessions, not a successful end-to-end media stream. The queue API still fails closed with 503 because no resolver, queue manager or trusted session-creation path exists. Do not expose the service beyond loopback or treat it as production-ready.
+
+
+## Deterministic chunked-transfer tests
+
+The HTTP endpoint and its unit-tested `writeChunkedStream` helper share the same chunk-framing implementation. Tests cover progressive output in bounded 16 KiB blocks, successful terminal-chunk emission, omission of the terminal chunk after upstream failure, and immediate stop after a socket-write failure. These tests validate framing and producer/consumer control flow without creating a production session-injection endpoint. They do not replace a live MPD/CURL playback test.
