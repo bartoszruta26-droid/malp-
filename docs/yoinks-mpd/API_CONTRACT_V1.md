@@ -131,3 +131,8 @@ Komponent nie jest jeszcze połączony z endpointem lokalnego proxy HTTP. Nie ud
 
 
 Serwer HTTP korzysta obecnie ze stałej puli czterech wątków i ogranicza liczbę aktywnych/zleconych połączeń do 16; nadmiar otrzymuje 503. Nasłuch poza loopback jest blokowany do czasu wdrożenia i przeglądu TLS. Długie odpowiedzi mediów będą wymagały osobnej, ograniczonej puli, aby nie zagłodzić API sterującego.
+
+
+## Rejestr sesji strumieniowych — komponent wewnętrzny
+
+Dodano `StreamSessionRegistry`: domyślnie maksymalnie cztery sesje (twardy limit konfiguracji 32). Każda sesja posiada jeden producent HTTPS i stały bufor RAM. Identyfikatory sesji mają 128 bitów losowości z systemowego `getrandom(2)`, są kodowane jako 32 znaki szesnastkowe. Rejestr obsługuje wyszukiwanie, anulowanie, usuwanie i czyszczenie. Nie jest jeszcze podłączony do endpointu MPD ani API kolejki; nie generuje obecnie URI do odtwarzania.
