@@ -125,6 +125,10 @@ bool LazyStreamSessionRegistry::activate(const std::string& id, const ResolveAud
         return false;
     }
 
+    if (config_.after_upstream_start_for_tests) {
+        config_.after_upstream_start_for_tests();
+    }
+
     bool discard_stream = false;
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -143,6 +147,15 @@ bool LazyStreamSessionRegistry::activate(const std::string& id, const ResolveAud
         // DNS/TLS setup can take up to the configured connect timeout.
         stream->cancel();
         stream->wait();
+        // release(id, true) may have cancelled this activation after start()
+        // but before publication. The activation still owns the reservation
+        // until its unpublished worker has been stopped and joined.
+        std::lock_guard<std::mutex> lock(mutex_);
+        const auto found = sessions_.find(id);
+        if (found != sessions_.end() && found->second.cancellation == cancellation) {
+            found->second.activating = false;
+            found->second.failed = false;
+        }
         return false;
     }
     return true;
