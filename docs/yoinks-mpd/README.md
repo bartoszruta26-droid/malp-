@@ -79,7 +79,7 @@ yt-dlp is a resolver, not the streaming transport. Invoke it with a fixed execut
 
 1. Verify MPD CURL input and real HTTP playback on the exact Raspberry Pi build.
 2. Finalize control API request/response contract and threat model.
-3. Implement C++ service skeleton, configuration, token authentication and process supervision.
+3. Implement C++ service skeleton, configuration, token authentication and process supervision. (Started: CMake core and bounded RAM buffer; HTTP server/auth routes remain open.)
 4. Implement yt-dlp metadata/source resolver with playlist expansion.
 5. Implement bounded-memory C++ HTTP relay, refresh, cancellation and HTTP semantics.
 6. Implement MPD queue manager using MPD protocol and stable local URIs.
@@ -96,4 +96,4 @@ yt-dlp is a resolver, not the streaming transport. Invoke it with a fixed execut
 
 ## Verification status
 
-No end-to-end YouTube-to-MPD HTTP playback is claimed. The Raspberry Pi CURL compatibility gate remains open until actual playback is demonstrated on the target hardware. The HTTP proxy implementation is the next engineering deliverable.
+No end-to-end YouTube-to-MPD HTTP playback is claimed. The Raspberry Pi CURL compatibility gate remains open until actual playback is demonstrated on the target hardware. The first C++ core primitive is now present (`yoinks-mpd/`); the HTTP server and actual media relay remain the next engineering deliverables.
