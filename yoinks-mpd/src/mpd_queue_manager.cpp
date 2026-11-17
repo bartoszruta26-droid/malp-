@@ -62,16 +62,18 @@ struct CommandReply {
 
 CommandReply command(beast::tcp_stream& stream, asio::streambuf& buffer,
                      const std::string& text,
-                     std::chrono::steady_clock::time_point deadline) {
+                     std::chrono::steady_clock::time_point deadline,
+                     std::size_t maximum_lines = 32,
+                     std::size_t maximum_bytes = 8192) {
     CommandReply reply;
     if (text.find('\0') != std::string::npos || text.find_first_of("\r\n") != std::string::npos
             || !writeCommand(stream, text + "\n", deadline)) return reply;
     std::size_t bytes = 0;
-    for (std::size_t count = 0; count < 32; ++count) {
+    for (std::size_t count = 0; count < maximum_lines; ++count) {
         std::string line;
         if (!readLine(stream, buffer, line, deadline)) return reply;
         bytes += line.size() + 1;
-        if (bytes > 8192) return reply;
+        if (bytes > maximum_bytes) return reply;
         if (line == "OK") { reply.success = true; return reply; }
         if (line.rfind("ACK ", 0) == 0) { reply.rejected = true; return reply; }
         reply.lines.push_back(std::move(line));
@@ -221,6 +223,41 @@ MpdQueueResult MpdQueueManager::enqueue(const std::vector<std::string>& stream_u
 
     result.success = true;
     result.queued = result.song_ids.size();
+    return result;
+}
+
+MpdQueueSnapshot MpdQueueManager::listStreamSessionIds() const {
+    MpdQueueSnapshot result;
+    const auto deadline = std::chrono::steady_clock::now()
+            + std::chrono::milliseconds(config_.operation_timeout_milliseconds);
+    asio::io_context context;
+    beast::tcp_stream stream{context};
+    stream.expires_after(std::chrono::milliseconds(config_.operation_timeout_milliseconds));
+    beast::error_code error;
+    stream.connect(tcp::endpoint{asio::ip::make_address(config_.host), config_.port}, error);
+    if (error) {
+        result.error_code = "mpd_connect_failed";
+        return result;
+    }
+    asio::streambuf buffer{1024 * 1024};
+    std::string greeting;
+    if (!readLine(stream, buffer, greeting, deadline) || greeting.rfind("OK MPD ", 0) != 0) {
+        result.error_code = "mpd_protocol_greeting_invalid";
+        return result;
+    }
+    const auto reply = command(stream, buffer, "playlistinfo", deadline, 8192, 1024 * 1024);
+    if (!reply.success) {
+        result.error_code = reply.rejected ? "mpd_playlistinfo_rejected" : "mpd_playlistinfo_failed";
+        return result;
+    }
+    const std::string prefix = "http://127.0.0.1:" + std::to_string(config_.stream_port) + "/stream/";
+    for (const auto& line : reply.lines) {
+        constexpr char file_prefix[] = "file: ";
+        if (line.rfind(file_prefix, 0) != 0) continue;
+        const std::string uri = line.substr(sizeof(file_prefix) - 1);
+        if (isAllowedStreamUri(uri)) result.stream_session_ids.push_back(uri.substr(prefix.size()));
+    }
+    result.success = true;
     return result;
 }
 
