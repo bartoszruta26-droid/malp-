@@ -90,7 +90,7 @@ public class YouTubeShareParserTest {
     }
 
     @Test public void ignoresNonTextPayloadsInMultipleShare() {
-        List<String> urls = YouTubeShareParser.extractYouTubeUrls(
+        List<String> urls = YouTubeShareParser.extractYouTubeUrlsFromPayloads(
                 java.util.Arrays.asList(
                         null,
                         Integer.valueOf(42),
