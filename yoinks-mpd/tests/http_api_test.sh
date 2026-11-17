@@ -40,7 +40,9 @@ fi
 
 health="$(curl --silent --show-error "http://127.0.0.1:$port/api/v1/health")"
 grep -q '"api_version":1' <<<"$health"
-grep -q '"control_ready":false' <<<"$health"
+grep -q '"control_ready":true' <<<"$health"
+grep -q '"media_ready":false' <<<"$health"
+grep -q '"mpd_playback_verified":false' <<<"$health"
 
 # Stream route rejects unsupported methods and Range rather than returning misleading media.
 invalid_stream_status="$(curl --silent -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/stream/invalid")"
