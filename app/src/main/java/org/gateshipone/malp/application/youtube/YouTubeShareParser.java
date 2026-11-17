@@ -8,13 +8,13 @@
  */
 package org.gateshipone.malp.application.youtube;
 
-import android.net.Uri;
-import android.text.TextUtils;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.net.URI;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -44,7 +44,7 @@ public final class YouTubeShareParser {
     private YouTubeShareParser() { }
 
     public static List<String> extractYouTubeUrls(String sharedText) {
-        if (TextUtils.isEmpty(sharedText)) {
+        if (sharedText == null || sharedText.isEmpty()) {
             return Collections.emptyList();
         }
 
@@ -61,7 +61,7 @@ public final class YouTubeShareParser {
     }
 
     /** Extract links from the text payloads used by ACTION_SEND_MULTIPLE. */
-    public static List<String> extractYouTubeUrls(Iterable<?> sharedTexts) {
+    public static List<String> extractYouTubeUrlsFromPayloads(Iterable<?> sharedTexts) {
         if (sharedTexts == null) return Collections.emptyList();
         List<String> result = new ArrayList<>();
         for (Object item : sharedTexts) {
@@ -78,11 +78,11 @@ public final class YouTubeShareParser {
     }
 
     private static String validateAndNormalize(String candidate) {
-        if (TextUtils.isEmpty(candidate)) {
+        if (candidate == null || candidate.isEmpty()) {
             return null;
         }
         try {
-            Uri uri = Uri.parse(candidate);
+            URI uri = new URI(candidate);
             String scheme = uri.getScheme();
             String host = uri.getHost();
             if (!"https".equalsIgnoreCase(scheme) || host == null) {
@@ -101,16 +101,17 @@ public final class YouTubeShareParser {
             if ("youtu.be".equals(host)) {
                 validPath = isVideoId(path.startsWith("/") ? path.substring(1) : path);
             } else if ("/watch".equals(path)) {
-                validPath = isVideoId(uri.getQueryParameter("v"));
+                validPath = isVideoId(queryParameter(uri.getRawQuery(), "v"));
             } else if ("/playlist".equals(path)) {
-                validPath = isPlaylistId(uri.getQueryParameter("list"));
+                validPath = isPlaylistId(queryParameter(uri.getRawQuery(), "list"));
             } else {
-                List<String> segments = uri.getPathSegments();
-                validPath = segments.size() == 2
-                        && ("shorts".equals(segments.get(0))
-                            || "live".equals(segments.get(0))
-                            || "embed".equals(segments.get(0)))
-                        && isVideoId(segments.get(1));
+                String[] segments = path.startsWith("/")
+                        ? path.substring(1).split("/", -1) : path.split("/", -1);
+                validPath = segments.length == 2
+                        && ("shorts".equals(segments[0])
+                            || "live".equals(segments[0])
+                            || "embed".equals(segments[0]))
+                        && isVideoId(segments[1]);
             }
             if (!validPath) {
                 return null;
@@ -119,6 +120,27 @@ public final class YouTubeShareParser {
         } catch (RuntimeException ignored) {
             return null;
         }
+    }
+
+    private static String queryParameter(String rawQuery, String key) {
+        if (rawQuery == null) return null;
+        for (String pair : rawQuery.split("&")) {
+            int separator = pair.indexOf('=');
+            String rawName = separator < 0 ? pair : pair.substring(0, separator);
+            try {
+                String name = URLDecoder.decode(rawName, StandardCharsets.UTF_8.name());
+                if (key.equals(name)) {
+                    String rawValue = separator < 0 ? "" : pair.substring(separator + 1);
+                    return URLDecoder.decode(rawValue, StandardCharsets.UTF_8.name());
+                }
+            } catch (java.io.UnsupportedEncodingException impossible) {
+                // UTF-8 is required by every Java implementation.
+                throw new AssertionError(impossible);
+            } catch (IllegalArgumentException malformedEncoding) {
+                return null;
+            }
+        }
+        return null;
     }
 
     private static boolean isVideoId(String value) {
