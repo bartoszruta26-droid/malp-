@@ -5,7 +5,7 @@ binary="$1"
 port=18787
 token="test-token-with-at-least-32-characters"
 log_file="$(mktemp)"
-"$binary" > /dev/null 2>"$log_file" &
+YOINKS_MPD_TOKEN="$token" YOINKS_MPD_PORT="$port" "$binary" > /dev/null 2>"$log_file" &
 server_pid=$!
 cleanup() {
     kill "$server_pid" 2>/dev/null || true
