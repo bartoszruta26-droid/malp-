@@ -136,3 +136,33 @@ Serwer HTTP korzysta obecnie ze stałej puli czterech wątków i ogranicza liczb
 ## Rejestr sesji strumieniowych — komponent wewnętrzny
 
 Dodano `StreamSessionRegistry`: domyślnie maksymalnie cztery sesje (twardy limit konfiguracji 32). Każda sesja posiada jeden producent HTTPS i stały bufor RAM; łączna alokacja buforów jest ograniczona do 8 MiB. Identyfikatory sesji mają 128 bitów losowości z systemowego `getrandom(2)`, są kodowane jako 32 znaki szesnastkowe. Rejestr obsługuje wyszukiwanie, anulowanie, usuwanie i czyszczenie. Nie jest jeszcze podłączony do endpointu MPD ani API kolejki; nie generuje obecnie URI do odtwarzania.
+
+
+## Aktualny stan implementacji i korekty kontraktu (2026-11-17)
+
+Poniższa sekcja zastępuje wcześniejsze oznaczenia „serwer nie jest jeszcze zaimplementowany” oraz historyczne opisy odpowiedzi 503 backend_not_ready.
+
+### Implementacja
+
+- `POST /api/v1/queue` jest podłączony do `YtDlpResolver`, `YoutubeQueueService`, `LazyStreamSessionRegistry` i `MpdQueueManager`.
+- Metadane są rozwiązywane przed zmianą kolejki; audio nie jest pobierane podczas operacji enqueue.
+- Rejestr tworzy lokalne URI dla maksymalnie 200 pozycji. Adresy CDN są rozwiązywane dopiero przy `GET /stream/{opaque-id}`.
+- MPD dostaje wyłącznie `http://127.0.0.1:<port>/stream/<opaque-id>`.
+- Odpowiedź sukcesu obecnej wersji zawiera `success`, `queued`, `started`, `playlist` i `rollback_complete`. `request_id`, `title` i `items` nie są obecnie emitowane; klient Androida nie wymaga `request_id`.
+- `started=true` wyłącznie po potwierdzeniu komendy `playid` przez MPD.
+- `enqueue` dopisuje nowe URI na końcu kolejki.
+- `play_now` wstawia cały nowy blok przed dotychczasową kolejką, zachowując oryginalną kolejność: wykonuje `addid URI 0` w odwrotnej kolejności, a następnie `playid` dla pierwszej pozycji z żądania. Nie usuwa istniejących pozycji.
+- Nie są wysyłane komendy `clear` ani zmiany trybów repeat/random/single/consume.
+- Nieznany identyfikator sesji daje 404; błąd resolvera 502; limit aktywacji lub zajęta sesja 503. Błąd połączenia z MPD 503, timeout resolvera 504, błędny/nieobsługiwany wynik metadanych 422, pozostałe błędy upstream 502.
+- Klient Androida odczytuje odpowiedź zgodną z aktualnym kontraktem; nie wymaga nieistniejącego pola `request_id`.
+
+### Ograniczenia i nierozstrzygnięte kwestie
+
+- Endpoint mediów aktualnie obsługuje GET; HEAD daje 405, Range daje 501. Zgodność z MPD/CURL nie została potwierdzona na docelowym Raspberry Pi.
+- Nie ma jeszcze pozytywnego testu pełnego HTTP → mock MPD → odpowiedź 200. Warstwy `YoutubeQueueService` i `MpdQueueManager` mają osobne testy, a test HTTP przechodzi przez resolver fixture do kontrolowanego błędu niedostępnego MPD.
+- `GET /api/v1/requests/{request_id}` i `DELETE /api/v1/requests/{request_id}` pozostają niezaimplementowane.
+- `play_now` ma test jednostkowy potwierdzający wstawianie bloku przed starą kolejką; nie jest to jeszcze test na konkretnym buildzie MPD.
+- Testy CI po poprawie semantyki sesji: run `44060542148` — build i CTest zakończone sukcesem. Nowsze zmiany kolejności play-now i mapowania statusów HTTP wymagają własnego zakończonego przebiegu CI.
+- Wdrożenie produkcyjne i odtwarzanie na Raspberry Pi pozostają zablokowane do czasu testu MPD/CURL na urządzeniu oraz przeglądu bezpieczeństwa.
+
+Nie traktować samego przejścia CTest jako potwierdzenia zgodności sprzętowej ani działającego odtwarzania end-to-end.
