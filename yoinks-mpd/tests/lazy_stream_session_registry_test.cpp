@@ -401,6 +401,15 @@ void testRetainOnlyPreservesUnpublishedActivationAndSlotAccounting() {
 
     require(unpublished_slot_reserved,
             "the unpublished upstream must own exactly one active slot");
+    if (removed != 0 || !unpublished_slot_reserved || !retain_only_preserved) {
+        std::cerr << "retainOnly unpublished diagnostic: "
+                  << "active_before=" << unpublished_slot_reserved
+                  << ", removed=" << removed
+                  << ", contains_after=" << registry.contains(first_id)
+                  << ", active_after=" << registry.activeCount()
+                  << ", second_activated_early=" << second_activated_early
+                  << '\\n';
+    }
     require(removed == 0,
             "retainOnly must preserve an in-flight unpublished activation");
     require(retain_only_preserved,
