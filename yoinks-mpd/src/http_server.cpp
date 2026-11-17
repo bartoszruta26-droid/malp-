@@ -87,6 +87,20 @@ http::response<http::string_body> response(
     return result;
 }
 
+http::status queueFailureStatus(const std::string& error_code) {
+    if (error_code == "mpd_connect_failed"
+            || error_code == "mpd_protocol_greeting_invalid"
+            || error_code == "session_capacity_reached") {
+        return http::status::service_unavailable;
+    }
+    if (error_code == "process_timeout") return http::status::gateway_timeout;
+    if (error_code == "invalid_entry_count" || error_code == "no_supported_entries"
+            || error_code == "playlist_limit_or_empty") {
+        return http::status::unprocessable_entity;
+    }
+    return http::status::bad_gateway;
+}
+
 http::response<http::string_body> handle(
         const http::request<http::string_body>& request,
         const std::string& configured_token,
@@ -152,8 +166,9 @@ http::response<http::string_body> handle(
             result["error"] = {{"code", queued.error_code},
                                {"message", "YouTube queue request could not be completed"}};
         }
-        return response(queued.success ? http::status::ok : http::status::bad_gateway,
-                result.dump(), request.version());
+        const auto status = queued.success ? http::status::ok
+                : queueFailureStatus(queued.error_code);
+        return response(status, result.dump(), request.version());
     }
 
     return response(http::status::not_found,
