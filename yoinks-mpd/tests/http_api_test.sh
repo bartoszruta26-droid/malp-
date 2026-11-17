@@ -32,6 +32,10 @@ health="$(curl --silent --show-error "http://127.0.0.1:$port/api/v1/health")"
 grep -q '"api_version":1' <<<"$health"
 grep -q '"control_ready":false' <<<"$health"
 
+# Multiple independent clients must be served concurrently.
+seq 1 8 | xargs -P 8 -I '{}' sh -c \
+    'curl --silent --show-error --fail "http://127.0.0.1:'"$port"'/api/v1/health" >/dev/null'
+
 unauthorized_status="$(curl --silent -o /dev/null -w '%{http_code}' \
     -H 'Content-Type: application/json' \
     -d '{"url":"https://youtu.be/dQw4w9WgXcQ","mode":"enqueue"}' \
