@@ -787,3 +787,28 @@ Commit `3ea3d98c54220d4b71b7ec1caa9649ca6fc1bbb9` uzyskał `build-and-test: succ
 2. Zaprojektować anulowanie żądania i sesji tak, aby zamknięcie klienta, stop/next i shutdown kończyły proces yt-dlp oraz producenta HTTP.
 3. Dopiero po utworzeniu sesji i queue managera zwracać sukces w `/api/v1/queue`; do tego czasu zachować 503.
 4. W1 nadal pozostaje otwarty: wymagany jest osobny test MPD CURL na Raspberry Pi, bez zmian w produkcyjnej kolejce.
+
+## Aktualizacja — anulowanie procesu yt-dlp i utwardzenie testów (2026-11-17)
+
+### Zmiany
+
+- `YtDlpResolver::resolveMetadata` oraz `resolveAudioUrl` przyjmują opcjonalny wskaźnik do współdzielonego `std::atomic_bool` należącego do wywołującego.
+- Ustawienie flagi podczas pracy procesu kończy całą grupę procesów `yt-dlp` sygnałem SIGKILL, zbiera proces potomny i zwraca kod `process_cancelled` dla operacji metadanych. Flaga musi żyć co najmniej do zakończenia synchronicznego wywołania.
+- Anulowanie jest sprawdzane także przed uruchomieniem procesu; istniejące limity czasu, stdout i stderr pozostają aktywne.
+- Testy atrap sprawdzają przekazywanie `--ignore-config`, `--no-cache-dir`, `--skip-download`, a dla rozwiązywania URL także `--get-url`.
+- Dodano test, który anuluje długo działający proces z drugiego wątku i wymaga zakończenia w czasie krótszym niż 2 sekundy przy limicie procesu 10 sekund.
+
+### Granice wdrożenia
+
+To jest mechanizm biblioteczny, nie pełna integracja anulowania HTTP: `HttpServer` nie zarządza jeszcze flagą żądania ani nie przekazuje jej do resolvera. Nie ma jeszcze powiązania anulowania z operacjami MPD `stop`/`next`. `POST /api/v1/queue` musi nadal zwracać 503, a MPD queue manager pozostaje niezrealizowany.
+
+### Weryfikacja
+
+Zmiany oczekują na wynik GitHub Actions. Testy nie łączą się z YouTube i nie pobierają audio. Nie wykonano nowego builda na Raspberry Pi. Poprzedni wynik 6/6 PASS dotyczy commita `3ea3d98...` i nie obejmuje niniejszej zmiany.
+
+### Kolejne kroki
+
+1. Po PASS CI zintegrować rejestr aktywnych żądań i bezpieczne przekazywanie flagi anulowania z `HttpServer` do resolvera, z kontrolą czasu życia flagi.
+2. Dodać testy anulowania przy zamykaniu klienta i przy shutdown serwera.
+3. Następnie zaprojektować transakcyjny MPD queue manager bez czyszczenia istniejącej kolejki i bez zmiany trybów odtwarzania.
+4. Przed integracją odtwarzania sprawdzić rzeczywiste żądania MPD CURL (HEAD/Range/reconnect) na Raspberry Pi w osobnym, nieprodukcyjnym teście.
