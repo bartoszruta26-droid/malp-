@@ -100,3 +100,11 @@ Before spawning yt-dlp, resolver pipe descriptors are moved above file descripto
 A loopback-only `MpdQueueManager` has been added as an isolated component. It accepts only exact local proxy URIs (`http://127.0.0.1:<stream-port>/stream/<32-char-opaque-id>`), connects only to a loopback MPD endpoint, and appends entries with `addid` so stable MPD song IDs are used. Enqueue mode does not issue playback commands. `play_now` issues `playid` for the first newly-added entry only when explicitly requested. The component never calls `clear` and never changes repeat, random, single or consume modes.
 
 Known successful additions are rolled back with `deleteid` if MPD explicitly rejects a later add or the explicit `playid`. Ambiguous transport outcomes are reported as unknown and are not destructively rolled back, because the server may already have accepted the command or started playback. The component is not yet connected to the HTTP queue endpoint. It must pass mock-protocol tests and then a controlled Raspberry Pi MPD/CURL compatibility test before deployment.
+
+## Lazy playlist sessions
+
+`LazyStreamSessionRegistry` stores only a validated 11-character YouTube video ID and a random opaque session capability when a playlist item is registered. It does not invoke yt-dlp, resolve a CDN URL, start a media transfer, or allocate an audio buffer during queue construction. The resolver is called only when the corresponding `/stream/<opaque-id>` request activates that item.
+
+The registry is bounded to 200 queued session records and at most two simultaneously activating/active upstreams. Aggregate active RAM buffers are capped at 8 MiB. Concurrent activation of the same item is single-flight. Erasing a session or clearing the registry signals a shared cancellation flag to the resolver and cancels any active upstream stream.
+
+This registry is currently an isolated component with unit tests; the HTTP queue endpoint and stream handler have not yet been switched to it. The queue endpoint remains fail-closed (`503 backend_not_ready`) until the complete resolver → lazy registry → MPD queue flow is integrated and validated.
