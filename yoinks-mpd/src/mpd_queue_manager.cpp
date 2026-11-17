@@ -119,7 +119,7 @@ MpdQueueManager::MpdQueueManager(MpdQueueManagerConfig config)
     }
 }
 
-bool MpdQueueManager::isAllowedStreamUri(const std::string& uri) const noexcept {
+bool MpdQueueManager::isAllowedStreamUri(const std::string& uri) const {
     const std::string prefix = "http://127.0.0.1:" + std::to_string(config_.stream_port)
             + "/stream/";
     if (uri.size() != prefix.size() + 32 || uri.compare(0, prefix.size(), prefix) != 0) {
@@ -164,16 +164,24 @@ MpdQueueResult MpdQueueManager::enqueue(const std::vector<std::string>& stream_u
             result.rollback_complete = rollback(stream, buffer, result.song_ids, deadline);
             if (!reply.rejected) result.rollback_complete = false;
             result.error_code = reply.rejected ? "mpd_add_rejected" : "mpd_add_outcome_unknown";
-            result.queued = 0;
-            result.song_ids.clear();
+            if (result.rollback_complete) {
+                result.queued = 0;
+                result.song_ids.clear();
+            } else {
+                result.queued = result.song_ids.size();
+            }
             return result;
         }
         if (!parseSongId(reply, id)) {
             result.rollback_complete = rollback(stream, buffer, result.song_ids, deadline);
             result.rollback_complete = false;
             result.error_code = "mpd_add_response_invalid";
-            result.queued = 0;
-            result.song_ids.clear();
+            if (result.rollback_complete) {
+                result.queued = 0;
+                result.song_ids.clear();
+            } else {
+                result.queued = result.song_ids.size();
+            }
             return result;
         }
         result.song_ids.push_back(id);
