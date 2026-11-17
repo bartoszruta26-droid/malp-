@@ -477,3 +477,12 @@ No production binary installation or service restart without explicit user appro
 3. Once the corrected stress test and sanitizer suite pass CI, pull the exact branch head to Raspberry Pi and run normal plus separate sanitizer builds in `/tmp/yoinks-mpd-audit` and `/tmp/yoinks-mpd-sanitizers` respectively.
 4. Continue with deterministic streaming tests for slow consumers, disconnect during blocked upstream writes, timeout/error propagation, byte-limit enforcement, and orderly shutdown.
 5. Complete DNS/SSRF analysis before changing address resolution or connection pinning. Keep live YouTube, target MPD, audible output, and RAM-only storage checks as independent acceptance gates.
+
+
+## DNS/SSRF remediation design (2026-11-17)
+
+1. Add an explicit destination-address policy for IPv4 and IPv6, including private, loopback, link-local, multicast, unspecified, reserved/special-purpose, IPv4-mapped IPv6, and transition/translation ranges.
+2. Ensure the address validated is the address actually connected to; avoid a separate check-then-resolve race. Preserve HTTPS SNI and hostname verification against the original `googlevideo.com` hostname.
+3. Test multiple DNS answers where one is public and one is forbidden; reject unsafe answer sets or constrain connection attempts to validated addresses only.
+4. Add deterministic tests for DNS rebinding, IPv4/IPv6 edge cases, malformed resolver responses, and test-only loopback fixture behavior.
+5. Only then implement the smallest safe change and run normal plus ASan/UBSan suites. Keep redirects disabled.
