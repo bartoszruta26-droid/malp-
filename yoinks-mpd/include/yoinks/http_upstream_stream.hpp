@@ -52,6 +52,9 @@ public:
     // are accepted. The source URL is never included in error messages.
     bool start(const std::string& resolved_https_url);
 
+    // Exposed for deterministic security tests; accepts only trusted media CDN URLs.
+    static bool isAllowedResolvedUrl(const std::string& value);
+
     // Progressive consumer interface; returns 0 at EOF/cancellation.
     std::size_t read(std::uint8_t* destination, std::size_t maximum);
 
