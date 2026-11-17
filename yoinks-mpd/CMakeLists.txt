@@ -96,4 +96,12 @@ if(YOINKS_MPD_BUILD_TESTS)
     add_test(NAME http_api_integration
         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/http_api_test.sh
             $<TARGET_FILE:yoinks-mpd> $<TARGET_FILE:yoinks_mpd_mock_mpd>)
+    add_executable(yoinks_mpd_http_stream_fixture tests/http_stream_fixture_server.cpp)
+    target_link_libraries(yoinks_mpd_http_stream_fixture PRIVATE yoinks_mpd_core)
+    target_compile_options(yoinks_mpd_http_stream_fixture PRIVATE
+        $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic;-Werror>
+    )
+    add_test(NAME http_stream_byte_integration
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/http_stream_test.sh
+            $<TARGET_FILE:yoinks_mpd_http_stream_fixture> $<TARGET_FILE:yoinks_mpd_mock_mpd>)
 endif()
