@@ -199,3 +199,10 @@ All six reported cases passed: binary FIFO transfer and cleanup; playlist reject
 - Added a separate Debug sanitizer configure/build/CTest sequence to `.github/workflows/yoinks-mpd-core.yml` in commit `fd9a330f`. The ordinary Release build/test remains a separate preceding job sequence.
 - GitHub Actions run `44123520539` is the workflow for exact head `fd9a330f`; it was still in progress at the time of this note. Do not claim sanitizer success until its sanitizer build and test steps complete successfully.
 - This changes build/test configuration only. It does not alter production service files, install a binary, restart MPD, or modify the queue.
+
+
+## Bounded lifecycle stress test added — CI pending (2026-11-17)
+
+- Added `testConcurrentLifecycleStressMaintainsRegistryAccounting()` in commit `a2a5b046a550a6ae9fbbe9b56841188c7befb8dc`.
+- Four concurrent workers exercise 16 retained capabilities: repeated failed lazy activation attempts, `release(id, true)`, `retainOnly()` reconciliation, and concurrent read/accounting calls. The workload is bounded (80 activation/release rounds per capability, 160 reconciliations, 500 observation rounds); after joining all workers it checks retained-session and active-slot accounting, then clears and shuts down the registry.
+- GitHub Actions run `44123745133` is validating this exact test commit with both the normal and sanitizer build workflow. Its result is pending; do not treat the stress or sanitizer gate as passed until completion.
