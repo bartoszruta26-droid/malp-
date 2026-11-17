@@ -21,6 +21,7 @@ YoutubeQueueService::YoutubeQueueService(YoutubeQueueServiceConfig config)
 
 YoutubeQueueServiceResult YoutubeQueueService::enqueue(
         const std::string& youtube_url, bool play_now) const {
+    std::lock_guard<std::mutex> operation_lock(operation_mutex_);
     YoutubeQueueServiceResult result;
     MetadataResult metadata;
     try {
