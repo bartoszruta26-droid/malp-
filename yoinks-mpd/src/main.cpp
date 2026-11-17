@@ -22,6 +22,15 @@ std::string environment(const char* name, const std::string& fallback) {
     return value == nullptr ? fallback : value;
 }
 
+bool booleanFromEnvironment(const char* name, bool fallback) {
+    const char* value = std::getenv(name);
+    if (value == nullptr) return fallback;
+    const std::string parsed(value);
+    if (parsed == "1" || parsed == "true") return true;
+    if (parsed == "0" || parsed == "false") return false;
+    throw std::invalid_argument(std::string(name) + " must be true, false, 1 or 0");
+}
+
 std::uint16_t portFromEnvironment(const char* variable = "YOINKS_MPD_PORT",
                                   const char* fallback = "8788") {
     const std::string value = environment(variable, fallback);
@@ -55,6 +64,10 @@ int main() {
         // are capped at 30 s so Android's 65 s response timeout remains sufficient.
         mpd_config.operation_timeout_milliseconds = 15000;
         auto mpd = std::make_shared<yoinks::MpdQueueManager>(std::move(mpd_config));
+        config.mpd_queue_manager = mpd;
+        config.playlist_watch.port = portFromEnvironment("YOINKS_MPD_MPD_PORT", "6600");
+        config.playlist_watch.operation_timeout_milliseconds = 5000;
+        config.playlist_watch_enabled = booleanFromEnvironment("YOINKS_MPD_PLAYLIST_WATCH", false);
 
         yoinks::YoutubeQueueServiceConfig queue_config;
         queue_config.stream_port = config.port;
