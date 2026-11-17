@@ -506,3 +506,6 @@ No production binary installation or service restart without explicit user appro
 - The test callback is optional and unset in production. It executes while the buffer mutex is held and therefore may only signal an independent test condition.
 - After this code change passes CI, run normal and sanitizer builds on Raspberry Pi before moving to HTTP client-disconnect/slow-consumer integration tests.
 - DNS/IP SSRF remains deferred at the user's request. No production installation or service restart.
+
+
+- CI caught a C++ member-initialization-order warning promoted to error in the new test seam. The initializer list has been reordered to match declaration order; verify the resulting head in both normal and sanitizer jobs.
