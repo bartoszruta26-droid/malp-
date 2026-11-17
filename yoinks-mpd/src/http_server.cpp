@@ -395,36 +395,36 @@ void HttpServer::run() {
                 MpdPlaylistWatcher watcher(watch_config);
                 auto retry_delay = std::chrono::seconds(1);
                 while (!stop_watcher.load()) {
-                const auto event = watcher.waitForPlaylistChange();
-                if (stop_watcher.load()) break;
-                if (event.success) {
-                    retry_delay = std::chrono::seconds(1);
-                    if (event.playlist_changed) {
-                        const auto snapshot = mpd->listPlaylistState();
-                        if (snapshot.success) {
-                            std::clog << "yoinks-mpd: playlist observed; entries="
-                                      << snapshot.entries.size() << ", state="
-                                      << snapshot.state << '\n';
-                        } else {
-                            std::clog << "yoinks-mpd: playlist snapshot unavailable; code="
-                                      << snapshot.error_code << '\n';
+                    const auto event = watcher.waitForPlaylistChange();
+                    if (stop_watcher.load()) break;
+                    if (event.success) {
+                        retry_delay = std::chrono::seconds(1);
+                        if (event.playlist_changed) {
+                            const auto snapshot = mpd->listPlaylistState();
+                            if (snapshot.success) {
+                                std::clog << "yoinks-mpd: playlist observed; entries="
+                                          << snapshot.entries.size() << ", state="
+                                          << snapshot.state << '\n';
+                            } else {
+                                std::clog << "yoinks-mpd: playlist snapshot unavailable; code="
+                                          << snapshot.error_code << '\n';
+                            }
                         }
+                        continue;
                     }
-                    continue;
-                }
-                if (!event.timed_out && !event.error_code.empty()) {
-                    std::clog << "yoinks-mpd: playlist watcher reconnect; code="
-                              << event.error_code << '\n';
-                    const auto until = std::chrono::steady_clock::now() + retry_delay;
-                    while (!stop_watcher.load()
-                            && std::chrono::steady_clock::now() < until) {
-                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                    }
-                    retry_delay = std::min(retry_delay * 2, std::chrono::seconds(10));
+                    if (!event.timed_out && !event.error_code.empty()) {
+                        std::clog << "yoinks-mpd: playlist watcher reconnect; code="
+                                  << event.error_code << '\n';
+                        const auto until = std::chrono::steady_clock::now() + retry_delay;
+                        while (!stop_watcher.load()
+                                && std::chrono::steady_clock::now() < until) {
+                            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                        }
+                        retry_delay = std::min(retry_delay * 2, std::chrono::seconds(10));
                     }
                 }
             } catch (...) {
-                std::clog << "yoinks-mpd: playlist watcher stopped after an internal error\\n";
+                std::clog << "yoinks-mpd: playlist watcher stopped after an internal error\n";
             }
         });
     }
