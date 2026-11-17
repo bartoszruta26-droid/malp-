@@ -893,3 +893,35 @@ Potwierdzony zakres CI obejmuje osiem zestawów testów C++/HTTP, w tym bufor RA
 ### Następna bramka techniczna
 
 Przed włączeniem kolejki należy wprowadzić kontrolowany kontekst zależności serwera (resolver, lazy registry, MPD queue manager i konfiguracja portów), przekazać flagę anulowania do resolvera metadanych, a następnie zintegrować kolejkę i obsługę strumienia. Testy muszą używać atrap resolvera i MPD oraz obejmować odrzucenia, niejednoznaczne odpowiedzi MPD, częściowy rollback, playlisty 1–200 pozycji, aktywację dopiero przy GET i shutdown. Dopiero po tych testach można rozważyć test CURL/MPD na Raspberry Pi. Nie zmieniać kolejki ani konfiguracji działającego MPD bez odrębnej zgody.
+
+
+## Aktualizacja integracji HTTP → resolver → sesje lazy → MPD (2026-11-17)
+
+Niniejsza sekcja jest nadrzędna wobec wcześniejszych fragmentów tego dokumentu, które określały integrację resolvera, sesji i menedżera MPD jako niezaimplementowaną.
+
+**Wykonane w kodzie gałęzi `feature/youtube-audio-bridge`:**
+- Dodano `YoutubeQueueService`, który pobiera wyłącznie metadane playlisty/filmu, tworzy ograniczone sesje lazy i przekazuje MPD wyłącznie lokalne URI `http://127.0.0.1:<port>/stream/<opaque-id>`.
+- Tworzenie kolejki nie rozwiązuje adresu CDN i nie uruchamia pobierania audio. Adres źródłowy jest rozwiązywany dopiero przy pierwszym żądaniu `GET /stream/{opaque-id}`.
+- `POST /api/v1/queue` jest podłączony do resolvera, rejestru lazy i `MpdQueueManager`. Tryb `enqueue` wyłącznie dopisuje pozycje; `play_now` przekazuje jawne żądanie odtworzenia pierwszej pozycji z bieżącego żądania.
+- `GET /stream/{opaque-id}` aktywuje sesję lazy, wywołuje `yt-dlp --get-url --skip-download`, sprawdza granicę HTTPS `googlevideo.com` i przekazuje audio progresywnie przez ograniczony bufor RAM.
+- Przy potwierdzonym rollbacku MPD sesje żądania są usuwane. Przy niejednoznacznym wyniku transportowym sesje pozostają, ponieważ MPD mógł już przyjąć URI. API nie deklaruje wtedy sukcesu.
+- Konfiguracja uruchomieniowa: `YOINKS_MPD_TOKEN`, `YOINKS_MPD_PORT`, `YOINKS_MPD_BIND`, `YOINKS_MPD_YTDLP` oraz `YOINKS_MPD_MPD_PORT`. Domyślny plik resolvera to `/usr/local/bin/yt-dlp`; MPD nasłuchuje domyślnie na loopback `127.0.0.1:6600`.
+- Nie dodano endpointu tworzenia sesji bez uwierzytelnienia. Serwer nadal odrzuca nasłuch poza loopback.
+- Nie wykonano żadnych poleceń `clear`, nie zmieniono repeat/random/single/consume. Nie zmieniano działającego MPD ani kolejki na Raspberry Pi.
+
+**Testy i bramki:**
+- Dodano testy jednostkowe `YoutubeQueueService`: kolejność i lokalne URI, brak aktywacji upstream podczas enqueue, limit 200, sprzątanie po potwierdzonym rollbacku, zachowanie sesji przy wyniku MPD nieznanym oraz błąd metadanych.
+- Test HTTP został zaktualizowany: poprawny URL bez dostępnego resolvera ma kończyć się błędem backendu HTTP 502, a nie fałszywym sukcesem lub historycznym 503.
+- Commity modułu i integracji: `027ba2b`, `33dcc56`, `1c5d994`, `fd17525`, `5e688e2`, `11368bd`, `14f264c`, `364296e`.
+- Wynik CI dla samego modułu i jego testów: run `44059431153`, zakończony `success` (build i CTest).
+- Integracja HTTP/startup/testu 502 została zapisana po tym przebiegu; jej własny CI należy uznać za potwierdzony dopiero po zakończeniu najnowszego workflow z wynikiem `success`.
+
+**Pozostałe bramki — nie deklarować gotowości produkcyjnej:**
+1. Zweryfikować najnowszy CI i wszystkie testy CTest po integracji HTTP.
+2. Dodać kontrolowane testy HTTP z atrapą resolvera i serwera MPD, w tym pozytywną odpowiedź enqueue, playlistę, play-now, rollback i niejednoznaczny wynik.
+3. Sprawdzić zachowanie MPD/CURL w konkretnej wersji zainstalowanej na Raspberry Pi: HEAD, Range, ponowne połączenie, timeout i rzeczywiste odtwarzanie. Obecny endpoint świadomie nie obsługuje HEAD ani Range; zgodność MPD nie jest potwierdzona.
+4. Przeprowadzić przegląd cyklu życia i anulowania aktywacji sesji przy shutdown oraz współbieżnych żądań.
+5. Dopiero po jawnej zgodzie wykonać testy urządzeniowe. Dotychczasowa kolejka 629 pozycji i aktywna usługa MPD pozostają nietknięte.
+6. Android nadal wymaga zgodności z kontraktem `POST /api/v1/queue` (jeżeli klient nadal wysyła `/resolve`) i bezpiecznego przechowywania tokenu. Nie ma gotowego APK ani potwierdzonego odtwarzania end-to-end.
+
+**Ocena:** przepływ serwerowy został połączony w kodzie, lecz pełna zgodność protokołu MPD, test sukcesu HTTP end-to-end, test na Raspberry Pi i integracja Androida pozostają otwarte. Nie scalać do `main` przed przejściem tych bramek.
