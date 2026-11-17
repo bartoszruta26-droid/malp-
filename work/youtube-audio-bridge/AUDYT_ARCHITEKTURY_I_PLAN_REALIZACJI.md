@@ -12,7 +12,7 @@
 
 Audyt stosuje cztery praktyczne zasady:
 
-1. **Prawda** — oddzielamy stan potwierdzony kodem od deklaracji, planów i testów, których nie wykonano. Nie nazywamy prototypu działającym odtwarzaczem.
+1. **Prawda** — oddzielamy stan potwierdzony kodem od deklaracji, planów i testów, których nie wykonano. Nie nazywamy projektu działającym odtwarzaczem.
 2. **Sprawiedliwość** — nowa funkcja nie może odbierać użytkownikowi kontroli nad istniejącą kolejką MPD, profilami MALP, wyjściami audio, głośnością ani lokalną biblioteką.
 3. **Miłość i troska** — domyślne zachowanie ma chronić dane, urządzenie, prywatność, bezpieczeństwo sieci i zasoby Raspberry Pi. Błędy mają być komunikowane jasno, bez uszkadzania bieżącego odtwarzania.
 4. **Odpowiedzialność** — każda funkcja otrzymuje kryteria akceptacji, testy i dowód wykonania. Nie deklarujemy zgodności sprzętowej bez testu na docelowym urządzeniu.
@@ -46,16 +46,36 @@ Celem jest umożliwienie użytkownikowi udostępnienia w Androidzie linku do fil
 
 Należy używać treści, do których użytkownik ma uprawniony dostęp, oraz respektować warunki korzystania z YouTube i prawa autorskie.
 
+## Aktualizacja stanu po korekcie HTTP-only (2026-11-17)
+
+Ta aktualizacja zastępuje historyczne opisy prototypu innym transportem. Jedyną zaakceptowaną ścieżką danych audio jest HTTP proxy w C++. Wcześniejszy skrypt producenta i jego testy zostały usunięte. Nie wolno przywracać FIFO, named pipes, plików audio, spoolingu ani cache plikowego.
+
+Stan potwierdzony na aktualnej gałęzi:
+- HEAD przed aktualizacją audytu: `44b70c944df36e6f28e916194a4876a45ad9e996`.
+- `scripts/yoinks-mpd/install.sh` instaluje wyłącznie yt-dlp jako resolver; nie instaluje proxy ani nie modyfikuje MPD.
+- `docs/yoinks-mpd/API_CONTRACT_V1.md` określa Control API, semantykę enqueue/play_now, błędy i kontrakt lokalnego endpointu mediów.
+- W repozytorium nie znaleziono CMake, Meson ani Makefile dla usługi Yoinks-MPD; brak źródeł C++ proxy.
+- Androidowy klient nadal używa `POST /api/v1/resolve` i oczekuje `stream_url`. Jest niezgodny z nowym kontraktem `POST /api/v1/queue`; wymaga przebudowy przed integracją.
+- Nie ma dowodu kompilacji C++, testów serwera, testu MPD CURL na Raspberry Pi ani odtwarzania end-to-end.
+
+Status etapów:
+- W0 — ZAKOŃCZONY: dokumentacja główna i instalacyjna wskazuje HTTP-only; historyczny prototyp usunięty.
+- W1 — OTWARTY: wymagany rzeczywisty raport z docelowego Raspberry Pi.
+- W2 — SPECYFIKACJA UTWORZONA: kontrakt API v1 zapisany; implementacja i testy kontraktowe pozostają otwarte.
+- W3–W9 — OTWARTE: implementacja, integracja, testy i wydanie nie zostały wykonane.
+
+Nie traktować zapisu specyfikacji API jako implementacji. Nie scalać do gałęzi głównej przed przejściem bramek wydania.
+
 ## 3. Stan faktyczny repozytorium
 
 Audyt wykonano na plikach gałęzi `feature/youtube-audio-bridge`. Poniższe obserwacje odnoszą się do pobranych wersji plików, a nie do uruchomienia aplikacji.
 
 ### 3.1 Istniejące elementy
 
-- `scripts/yoinks-mpd/yt-dlp-to-fifo.sh` — prototyp Bash dla jednego filmu, który kieruje wyjście binarne yt-dlp do FIFO.
-- `scripts/yoinks-mpd/install.sh` — instalator APT, pobiera samodzielny plik yt-dlp dla wybranych architektur i sprawdza SHA-256 względem upstreamowego pliku sum.
-- `tests/yoinks-mpd/test-yt-dlp-to-fifo.sh` — testy offline z atrapą yt-dlp.
-- `docs/yoinks-mpd/README.md` i `docs/yoinks-mpd/INSTALL_RASPBERRY_PI.md` — dokumentacja prototypu FIFO i instalacji.
+- `scripts/yoinks-mpd/install.sh` — instalator APT pobierający samodzielny plik yt-dlp dla obsługiwanych architektur i weryfikujący SHA-256 względem upstreamowego pliku sum. Instalator nie pobiera mediów i nie instaluje usługi proxy.
+- `scripts/yoinks-mpd/diagnose-mpd-http.sh` — diagnostyka odczytowa MPD, konfiguracji systemu, swap/zram i montowań.
+- `docs/yoinks-mpd/README.md`, `docs/yoinks-mpd/INSTALL_RASPBERRY_PI.md` oraz `docs/yoinks-mpd/MPD_HTTP_INPUT_DIAGNOSTIC.md` — dokumentacja docelowej architektury HTTP i bramki zgodności MPD.
+- `docs/yoinks-mpd/API_CONTRACT_V1.md` — kontrakt Control API v1 (specyfikacja, jeszcze bez serwera).
 - `docs/YOUTUBE_AUDIO_BRIDGE_NEXT_STEPS.md` — porównanie rozwiązań upstream i późniejsza koncepcja lokalnego HTTP relay.
 - `app/src/main/java/org/gateshipone/malp/application/youtube/YouTubeShareParser.java` — parser udostępnionych adresów.
 - `app/src/main/java/org/gateshipone/malp/application/youtube/YouTubeAudioBridgeClient.java` — klient HTTP Androida.
@@ -64,18 +84,18 @@ Audyt wykonano na plikach gałęzi `feature/youtube-audio-bridge`. Poniższe obs
 
 ### 3.2 Najważniejsze braki potwierdzone w kodzie
 
-1. **Brak serwera Raspberry Pi zgodnego z API Androida.** Klient wysyła `POST /api/v1/resolve`; instalator kopiuje jedynie skrypt producenta FIFO. Nie ma dostarczonej implementacji usługi HTTP realizującej ten kontrakt.
+1. **Brak serwera Raspberry Pi zgodnego z API Androida.** Klient wysyła `POST /api/v1/resolve`; nie ma dostarczonej implementacji usługi HTTP ani C++ proxy.
 2. **Brak wstawiania pozycji do MPD.** `MainActivity.resolveYouTubeShare()` otrzymuje listę pozycji, ale wyświetla komunikat, że wstawianie do kolejki nie jest dostępne. To nie jest działająca integracja odtwarzania.
-3. **Brak potwierdzonej drogi wejściowej FIFO do MPD.** Dokumentacja MPD opisuje `pipe` i `fifo` jako wyjścia audio MPD, a nie ogólne wejścia. Skrypt producenta dowodzi jedynie możliwości wysyłania bajtów do FIFO.
-4. **Rozbieżność dokumentacji.** Główny `README.md` oraz `docs/yoinks-mpd/README.md` wciąż przedstawiają FIFO jako główną ścieżkę. Nowszy dokument planu wskazuje lokalny HTTP relay przez wejście CURL MPD. Dokumentacja wymaga jednego, zatwierdzonego wariantu.
+3. **Brak potwierdzonej zgodności HTTP z MPD.** Nie przedstawiono jeszcze wyniku odtwarzania lokalnego strumienia HTTP przez CURL input na docelowym Raspberry Pi.
+4. **Aktualizacja audytu wymagana.** Dokumentacja bieżąca przyjmuje HTTP proxy jako jedyny transport mediów. Niniejszy audyt zawierał historyczne opisy wcześniejszego prototypu, które zostały zastąpione w tej aktualizacji.
 5. **Brak obsługi `ACTION_SEND_MULTIPLE`.** Manifest deklaruje wyłącznie `ACTION_SEND`; handler również obsługuje tylko pojedynczy tekst i pojedynczy link.
 6. **Brak kompletnego kontraktu kolejki i anulowania.** Nie ma gotowego mechanizmu atomowego dodawania playlisty, usuwania pozycji należących do żądania, zatrzymywania producenta przy next/stop ani odzyskiwania po rozłączeniu.
 7. **Bezpieczeństwo klienta wymaga poprawy.** Token jest opcjonalny, a adres usługi dopuszcza zwykłe HTTP. Odpowiedź akceptuje dowolne adresy HTTP(S) jako `stream_url`, bez sprawdzenia, czy host i port należą do skonfigurowanej usługi.
 8. **Sekret w SharedPreferences.** Token jest zapisany w zwykłych preferencjach aplikacji; należy przenieść go do magazynu opartego na Android Keystore.
 9. **Globalne `usesCleartextTraffic=true`.** Manifest dopuszcza nieszyfrowany ruch HTTP w całej aplikacji. Należy ograniczyć wyjątek do jawnie skonfigurowanego, zaufanego LAN albo wymagać HTTPS.
 10. **Parser URL wymaga dopracowania.** Lista hostów zawiera powtórzony wpis `www.youtube.com`; kod ma warunek dla `www.youtu.be`, którego nie ma na allowliście. Parser sprawdza host i ścieżkę, ale nie wymaga poprawnego identyfikatora filmu dla `/watch`; potrzebne są testy przypadków granicznych i parametrów.
-11. **Instalator nie instaluje usługi.** Pobranie yt-dlp i skopiowanie skryptu nie oznacza, że powstał daemon, serwer API ani integracja MPD.
-12. **Testy prototypu nie są testami odtwarzania.** Test z atrapą yt-dlp i osobnym czytnikiem FIFO nie sprawdza MPD, rzeczywistego YouTube, API, kolejki ani zachowania dźwięku.
+11. **Instalator nie instaluje usługi.** Pobranie yt-dlp nie oznacza, że powstał daemon, serwer API, proxy ani integracja MPD.
+12. **Brak testów usługi i odtwarzania.** W repozytorium nie ma obecnie testów C++ proxy ani dowodu odtwarzania przez MPD.
 
 ### 3.3 Ocena stanu
 
@@ -85,7 +105,7 @@ Audyt wykonano na plikach gałęzi `feature/youtube-audio-bridge`. Poniższe obs
 | Parser YouTube | Częściowy | Allowlista jest dobrym początkiem, ale wymaga testów i korekt |
 | Klient HTTP Android | Częściowy | Klient istnieje, lecz nie ma serwera po drugiej stronie |
 | Ustawienia bridge | Częściowe | URL/token są zapisywane; brak bezpiecznego magazynu i walidacji |
-| Producent FIFO | Prototyp | Jedna pozycja; brak potwierdzonego odbiorcy MPD |
+| C++ HTTP proxy | Brak | Nie ma jeszcze implementacji serwera ani relay |
 | Usługa Pi/API | Brak | Nie znaleziono implementacji zgodnej z klientem |
 | Stabilny strumień HTTP | Brak | Nie ma lokalnego proxy ani odświeżania URL |
 | MPD queue | Brak | Brak implementacji dodawania i zarządzania pozycjami |
@@ -94,17 +114,17 @@ Audyt wykonano na plikach gałęzi `feature/youtube-audio-bridge`. Poniższe obs
 | Test Android/Gradle | Niezweryfikowany | W tym audycie nie wykonano kompilacji |
 | Test sprzętowy | Niezweryfikowany | Brak niezależnego testu end-to-end |
 
-**Wniosek:** obecny stan to prototyp parsera, klienta i producenta FIFO oraz dokumentacja. Nie wolno przedstawiać go jako gotowego odtwarzacza YouTube dla MPD.
+**Wniosek:** obecny stan to częściowy prototyp Androida oraz dokumentacja architektury i kontraktu API. Nie istnieje jeszcze serwer C++, HTTP proxy ani działająca integracja z kolejką MPD.
 
 ## 4. Decyzja architektoniczna
 
 ### 4.1 Zalecany wariant: lokalny HTTP relay w C++
 
-Rekomenduję zrezygnować z FIFO jako docelowego transportu do MPD i przyjąć lokalny serwer HTTP w C++, pod warunkiem potwierdzenia obsługi wejścia CURL w dokładnym buildzie MPD na Raspberry Pi.
+Decyzja jest jednoznaczna: jedynym dozwolonym transportem mediów jest lokalny HTTP proxy w C++ do wejścia CURL MPD. Nie projektować ani nie wdrażać alternatywnego transportu mediów.
 
 Powód: MPD ma udokumentowane wejście HTTP/CURL, natomiast FIFO nie jest udokumentowanym, uniwersalnym wejściem. Wariant HTTP pozwala umieścić stabilne URI w kolejce MPD, a proxy może odświeżać krótkotrwały adres CDN w pamięci.
 
-To jest zmiana decyzji technicznej względem wczesnego prototypu FIFO. Nie należy jej ukrywać: dokumentacja i nazwy etapów muszą wyraźnie wskazywać, że FIFO pozostaje wyłącznie testem producenta, a nie docelowym interfejsem MPD.
+Wcześniejszy prototyp i jego testy zostały usunięte z gałęzi. FIFO, named pipes, pliki audio i cache plikowe nie są częścią rozwiązania ani planu wdrożenia.
 
 ### 4.2 Przepływ docelowy
 
@@ -450,7 +470,7 @@ Nie scalać do gałęzi głównej, dopóki:
 
 | Etap | Zakres | Rezultat wymagany do zamknięcia |
 |---|---|---|
-| W0 | Ujednolicenie dokumentacji i ADR | Jedna zatwierdzona architektura HTTP relay; FIFO opisane jako prototyp |
+| W0 | Ujednolicenie dokumentacji i ADR | Zakończono: HTTP proxy jest jedynym transportem; historyczny prototyp i testy usunięto |
 | W1 | Dowód MPD CURL input | Wynik z dokładnej wersji MPD na Raspberry Pi |
 | W2 | Specyfikacja API i bezpieczeństwa | Kontrakt endpointów, JSON, kody błędów, token, limity |
 | W3 | C++ service skeleton | Uruchamianie, konfiguracja, logowanie bez sekretów, systemd |
@@ -465,7 +485,7 @@ Każdy etap należy wykonać osobno, z przeglądem zmian i aktualizacją audytu.
 
 ## 13. Decyzje architektoniczne wymagające zapisania (ADR)
 
-1. **ADR-001: Transport MPD** — rekomendacja: lokalny HTTP relay + MPD CURL input; FIFO nie jest docelowym wejściem.
+1. **ADR-001: Transport MPD** — decyzja: wyłącznie lokalny HTTP proxy + MPD CURL input; bez alternatywnego transportu mediów.
 2. **ADR-002: Serwer** — C++ na Raspberry Pi, bez Pythona/Node.
 3. **ADR-003: Zarządzanie kolejką** — usługa dodaje pozycje protokołem MPD; nie zwraca Androidowi CDN URL.
 4. **ADR-004: Sekrety** — token API wymagany, Android Keystore, HTTPS albo jawnie zatwierdzony wyjątek LAN.
@@ -479,7 +499,7 @@ Każdy ADR powinien zawierać: kontekst, rozważane warianty, decyzję, konsekwe
 
 | Ryzyko | Skutek | Ograniczenie |
 |---|---|---|
-| Brak CURL w MPD | Brak odtwarzania HTTP | Bramka W1 przed budową relay |
+| Brak CURL w MPD | Brak odtwarzania HTTP | Bramka W1; nie zmienia decyzji o HTTP proxy, wymaga zgodnego builda MPD |
 | YouTube zmienia ekstrakcję | Przestaje działać resolve | Aktualizacje yt-dlp i testy kontraktowe |
 | URL CDN wygasa | Przerwanie utworu | Re-resolve i ostrożne wznowienie Range |
 | MPD nie obsługuje Range | Seek/refresh ograniczone | Test dokładnego klienta MPD |
@@ -494,10 +514,10 @@ Każdy ADR powinien zawierać: kontekst, rozważane warianty, decyzję, konsekwe
 
 Nie należy od razu pisać całego demona. Najpierw trzeba zamknąć najdroższe ryzyko techniczne:
 
-1. Ujednolicić README i dokumenty: docelowy wariant HTTP relay, bez twierdzenia, że FIFO jest wejściem MPD.
+1. Utrzymać HTTP proxy jako jedyny transport mediów i usunąć pozostałe historyczne opisy alternatywnych transportów.
 2. Uzyskać z Raspberry Pi dokładny wynik `mpd --version`, `mpc version` i test wejścia HTTP z CURL.
-3. Opracować kontrakt API i kolejki; ustalić semantykę play-now dla playlist.
-4. Dopiero po potwierdzeniu MPD CURL rozpocząć C++ relay.
+3. Kontrakt Control API v1 zapisano w `docs/yoinks-mpd/API_CONTRACT_V1.md`; przed implementacją należy zweryfikować semantykę kolejki z rzeczywistym MPD.
+4. Rozpocząć szkielet usługi C++ i testy jednostkowe niezależne od sprzętu; bramkę MPD CURL prowadzić równolegle, bez deklarowania zgodności do czasu testu.
 5. Zbudować resolver metadanych bez pobierania mediów.
 6. Dodać ograniczony bufor RAM i test back-pressure zanim podłączymy prawdziwy YouTube.
 7. Podłączyć MPD queue manager, a następnie MALP.
