@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 #include "yoinks/http_server.hpp"
+#include "yoinks/chunked_stream_writer.hpp"
 #include "yoinks/stream_session_registry.hpp"
 
 #include <boost/asio.hpp>
@@ -234,26 +235,16 @@ void serveStream(beast::tcp_stream& stream, const std::string& id,
     http::write_header(stream, serializer, error);
     if (error) { sessions->erase(id); return; }
 
-    std::array<std::uint8_t, 16384> block{};
-    bool completed = false;
-    while (!error) {
-        const std::size_t count = upstream->read(block.data(), block.size());
-        if (count == 0) {
-            completed = upstream->state() == UpstreamState::completed;
-            break;
-        }
-        std::ostringstream line;
-        line << std::hex << count << "\r\n";
-        const std::string chunk_header = line.str();
-        stream.expires_after(std::chrono::seconds(30));
-        asio::write(stream, asio::buffer(chunk_header), error);
-        if (!error) asio::write(stream, asio::buffer(block.data(), count), error);
-        if (!error) asio::write(stream, asio::buffer("\r\n", 2), error);
-    }
-    if (completed && !error) {
-        stream.expires_after(std::chrono::seconds(5));
-        asio::write(stream, asio::buffer("0\r\n\r\n", 5), error);
-    }
+    writeChunkedStream(
+        [&](std::uint8_t* destination, std::size_t maximum) {
+            return upstream->read(destination, maximum);
+        },
+        [&] { return upstream->state() == UpstreamState::completed; },
+        [&](const char* data, std::size_t size) {
+            stream.expires_after(std::chrono::seconds(30));
+            asio::write(stream, asio::buffer(data, size), error);
+            return !error;
+        });
     sessions->erase(id);
 }
 
