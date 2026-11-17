@@ -96,7 +96,7 @@ Wymaga tokenu. Anuluje wyłącznie zasoby i nieodtwarzane pozycje przypisane do 
 
 ## 7. Android — wymagane dopasowanie
 
-Obecny klient Android POST /api/v1/resolve oczekuje stream_url i nie odpowiada temu kontraktowi. Przed uruchomieniem serwera należy zmienić klienta na POST /api/v1/queue; klient nie powinien otrzymywać ani przekazywać lokalnych URI MPD. Ustawienia muszą wymagać tokenu, a sekret musi być przechowywany z użyciem Android Keystore.
+Klient Android wysyła POST /api/v1/queue i nie otrzymuje stream_url ani lokalnych URI MPD. Token jest przechowywany w postaci szyfrogramu z kluczem chronionym przez Android Keystore.
 
 ## 8. Testy kontraktowe
 
@@ -109,3 +109,10 @@ Obecny klient Android POST /api/v1/resolve oczekuje stream_url i nie odpowiada t
 - odpowiedzi nie zawierają CDN URL ani stream_url;
 - limity długości żądania, czasu, liczby pozycji i współbieżności;
 - logi bez tokenów i podpisanych adresów.
+
+
+## Implementacja serwera — status
+
+Dodano wstępny serwer HTTP C++ oparty na Boost.Beast i nlohmann-json. Implementuje GET /api/v1/health, uwierzytelnianie Bearer z porównaniem stałoczasowym, limit body 16 KiB, limit nagłówków 8 KiB oraz timeout odczytu/zapisu. POST /api/v1/queue poprawnie waliduje kształt JSON i tryb, ale zwraca 503 backend_not_ready, dopóki nie zostaną zintegrowane resolver, proxy i manager MPD. Jest to zachowanie fail-closed; endpoint nie udaje, że dodał pozycję.
+
+Serwer nasłuchuje domyślnie wyłącznie na 127.0.0.1:8788. Nie wystawiać go do LAN bez dodatkowej warstwy TLS i przeglądu konfiguracji sieciowej. Implementacja jest synchroniczna i obsługuje jedno połączenie naraz — nie jest jeszcze gotowa do wdrożenia produkcyjnego.
