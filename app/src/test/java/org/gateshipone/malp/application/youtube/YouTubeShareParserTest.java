@@ -25,12 +25,14 @@ public class YouTubeShareParserTest {
 
     @Test public void rejectsLookalikeHost() {
         assertFalse(YouTubeShareParser.isYouTubeUrl(
-                "https://youtube.com.evil.example/watch?v=abc"));
+                "https://youtube.com.evil.example/watch?v=dQw4w9WgXcQ"));
     }
 
     @Test public void rejectsHttpAndArbitraryHosts() {
-        assertFalse(YouTubeShareParser.isYouTubeUrl("http://youtube.com/watch?v=abc"));
-        assertFalse(YouTubeShareParser.isYouTubeUrl("https://example.com/watch?v=abc"));
+        assertFalse(YouTubeShareParser.isYouTubeUrl(
+                "http://youtube.com/watch?v=dQw4w9WgXcQ"));
+        assertFalse(YouTubeShareParser.isYouTubeUrl(
+                "https://example.com/watch?v=dQw4w9WgXcQ"));
     }
 
     @Test public void removesTrailingPunctuation() {
@@ -39,24 +41,30 @@ public class YouTubeShareParserTest {
         assertEquals(1, urls.size());
         assertEquals("https://youtu.be/dQw4w9WgXcQ", urls.get(0));
     }
-}
 
     @Test public void rejectsWatchWithoutValidVideoId() {
         assertFalse(YouTubeShareParser.isYouTubeUrl("https://www.youtube.com/watch"));
-        assertFalse(YouTubeShareParser.isYouTubeUrl("https://www.youtube.com/watch?v=abc"));
+        assertFalse(YouTubeShareParser.isYouTubeUrl(
+                "https://www.youtube.com/watch?v=abc"));
     }
 
     @Test public void rejectsPlaylistWithoutValidListId() {
         assertFalse(YouTubeShareParser.isYouTubeUrl("https://www.youtube.com/playlist"));
-        assertFalse(YouTubeShareParser.isYouTubeUrl("https://www.youtube.com/playlist?list=short"));
+        assertFalse(YouTubeShareParser.isYouTubeUrl(
+                "https://www.youtube.com/playlist?list=short"));
     }
 
     @Test public void acceptsShortsAndLiveWithValidVideoId() {
-        assertTrue(YouTubeShareParser.isYouTubeUrl("https://www.youtube.com/shorts/dQw4w9WgXcQ"));
-        assertTrue(YouTubeShareParser.isYouTubeUrl("https://www.youtube.com/live/dQw4w9WgXcQ"));
+        assertTrue(YouTubeShareParser.isYouTubeUrl(
+                "https://www.youtube.com/shorts/dQw4w9WgXcQ"));
+        assertTrue(YouTubeShareParser.isYouTubeUrl(
+                "https://www.youtube.com/live/dQw4w9WgXcQ"));
     }
 
     @Test public void rejectsUnexpectedSubdomainAndPathSuffix() {
-        assertFalse(YouTubeShareParser.isYouTubeUrl("https://www.youtu.be/dQw4w9WgXcQ"));
-        assertFalse(YouTubeShareParser.isYouTubeUrl("https://www.youtube.com/shorts/dQw4w9WgXcQ/extra"));
+        assertFalse(YouTubeShareParser.isYouTubeUrl(
+                "https://www.youtu.be/dQw4w9WgXcQ"));
+        assertFalse(YouTubeShareParser.isYouTubeUrl(
+                "https://www.youtube.com/shorts/dQw4w9WgXcQ/extra"));
     }
+}
