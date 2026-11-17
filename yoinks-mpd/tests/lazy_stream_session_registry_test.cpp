@@ -544,6 +544,82 @@ void testShutdownSerializesWithConcurrentRegistryMutations() {
     }
 }
 
+void testConcurrentLifecycleStressMaintainsRegistryAccounting() {
+    yoinks::LazyStreamSessionRegistry registry;
+    std::vector<std::string> ids;
+    ids.reserve(16);
+    for (unsigned index = 0; index < 16; ++index) {
+        const auto id = registry.create("qqAYW7uxErI");
+        require(!id.empty(), "stress fixture sessions must be created");
+        ids.push_back(id);
+    }
+    const std::unordered_set<std::string> live_ids(ids.begin(), ids.end());
+    std::atomic<unsigned> activation_attempts{0};
+    std::atomic<unsigned> release_attempts{0};
+    std::atomic<unsigned> reconciliation_attempts{0};
+    std::atomic<unsigned> observation_attempts{0};
+
+    std::thread activator([&] {
+        for (unsigned round = 0; round < 80; ++round) {
+            for (const auto& id : ids) {
+                registry.activate(id,
+                    [&](const std::string&, std::string&, const std::atomic_bool*) {
+                        activation_attempts.fetch_add(1);
+                        return false;
+                    });
+            }
+        }
+    });
+    std::thread releaser([&] {
+        for (unsigned round = 0; round < 80; ++round) {
+            for (const auto& id : ids) {
+                registry.release(id, true);
+                release_attempts.fetch_add(1);
+            }
+        }
+    });
+    std::thread reconciler([&] {
+        for (unsigned round = 0; round < 160; ++round) {
+            registry.retainOnly(live_ids);
+            reconciliation_attempts.fetch_add(1);
+        }
+    });
+    std::thread observer([&] {
+        for (unsigned round = 0; round < 500; ++round) {
+            for (const auto& id : ids) {
+                registry.contains(id);
+                registry.isFailed(id);
+            }
+            registry.size();
+            registry.activeCount();
+            observation_attempts.fetch_add(1);
+        }
+    });
+
+    activator.join();
+    releaser.join();
+    reconciler.join();
+    observer.join();
+
+    const bool all_sessions_retained = registry.size() == ids.size();
+    const bool no_active_reservations = registry.activeCount() == 0;
+    const bool all_workers_exercised = activation_attempts.load() > 0
+            && release_attempts.load() == 16U * 80U
+            && reconciliation_attempts.load() == 160U
+            && observation_attempts.load() == 500U;
+    registry.clear();
+    registry.shutdown();
+
+    require(all_workers_exercised,
+            "concurrent lifecycle stress workers must all complete their bounded workloads");
+    require(all_sessions_retained,
+            "retainOnly with every capability live must preserve the stress sessions");
+    require(no_active_reservations,
+            "completed activation/release stress must leave no active reservations");
+    require(registry.size() == 0 && registry.activeCount() == 0,
+            "clear and shutdown after stress must leave an empty registry");
+}
+
 void testRetainOnlyPreservesUnpublishedActivationAndSlotAccounting() {
     std::mutex mutex;
     std::condition_variable condition;
@@ -728,6 +804,7 @@ int main() {
         testClearDuringStartedButUnpublishedStreamDoesNotRecreateSession();
         testShutdownWaitsForUnpublishedActivationBeforeDestruction();
         testShutdownSerializesWithConcurrentRegistryMutations();
+        testConcurrentLifecycleStressMaintainsRegistryAccounting();
         testRetainOnlyPreservesUnpublishedActivationAndSlotAccounting();
         testRetainOnlyPreservesInFlightActivation();
         testReleaseRetainsQueuedCapabilityForReplay();
