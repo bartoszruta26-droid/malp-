@@ -23,7 +23,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cmake g++ libboost-dev nlohmann-json3-dev libcurl4-openssl-dev
       - name: Verify installer shell syntax
-        run: bash -n scripts/yoinks-mpd/install.sh
+        run: |
+          bash -n scripts/yoinks-mpd/install.sh
+          bash -n yoinks-mpd/tests/http_api_test.sh
       - name: Configure
         run: cmake -S yoinks-mpd -B yoinks-mpd/build -DCMAKE_BUILD_TYPE=Release
       - name: Build
