@@ -5,6 +5,7 @@
 #pragma once
 
 #include "yoinks/http_upstream_stream.hpp"
+#include <atomic>
 #include <cstddef>
 #include <functional>
 #include <memory>
@@ -14,7 +15,7 @@
 
 namespace yoinks {
 
-using ResolveAudioUrl = std::function<bool(const std::string&, std::string&)>;
+using ResolveAudioUrl = std::function<bool(const std::string&, std::string&, const std::atomic_bool*)>;
 
 struct LazyStreamSessionRegistryConfig {
     std::size_t maximum_sessions{200};
@@ -49,6 +50,7 @@ private:
         std::shared_ptr<HttpUpstreamStream> stream;
         bool activating{false};
         bool failed{false};
+        std::shared_ptr<std::atomic_bool> cancellation;
     };
     static std::string generateId();
     static bool validVideoId(const std::string& video_id) noexcept;
