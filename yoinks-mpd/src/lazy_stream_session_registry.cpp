@@ -186,10 +186,18 @@ bool LazyStreamSessionRegistry::release(const std::string& id, bool cancel_upstr
         found->second.serving = false;
         if (cancel_upstream) {
             found->second.refresh_required = true;
-            stream = found->second.stream;
+            stream = std::move(found->second.stream);
+        } else if (found->second.stream
+                && found->second.stream->state() != UpstreamState::running) {
+            // Keep only the lightweight video-ID capability after EOF/failure.
+            // The fixed-size RAM audio buffer is released immediately.
+            stream = std::move(found->second.stream);
         }
     }
-    if (stream) stream->cancel();
+    if (stream) {
+        if (cancel_upstream) stream->cancel();
+        stream->wait();
+    }
     return true;
 }
 
