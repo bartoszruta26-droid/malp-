@@ -3,7 +3,7 @@ set -euo pipefail
 
 binary="$1"
 port=18787
-token="test-token-with-at-least-32-characters"
+token="test-token-with-at-least-256-bits-of-entropy-123456789"
 log_file="$(mktemp)"
 YOINKS_MPD_TOKEN="$token" YOINKS_MPD_PORT="$port" "$binary" > /dev/null 2>"$log_file" &
 server_pid=$!
