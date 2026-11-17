@@ -51,3 +51,8 @@ Added `HttpUpstreamStream`, a C++17 producer that uses libcurl to fetch media pr
 Security constraints: HTTPS only, exact `*.googlevideo.com` host boundary, standard port 443 only, no URL userinfo, TLS peer/host verification enabled, redirects disabled, connect timeout and low-speed timeout enabled. Redirects are deliberately not followed because they could escape the CDN host policy; an expired or redirected source must be resolved again by the trusted yt-dlp resolver. Upstream URLs are never returned to Android or logged.
 
 The component is not yet connected to a local HTTP response endpoint. It is a bounded upstream producer only; the next implementation step is a stable stream-session registry and chunked local HTTP response consumed by MPD. The end-to-end bridge is not ready.
+
+
+## HTTP server concurrency and exposure policy
+
+The control server now uses a fixed four-thread worker pool and caps accepted/queued connections at 16; excess connections receive 503. The listener rejects every non-loopback bind address until a separately reviewed TLS termination design exists. This removes the earlier one-connection-at-a-time limitation, but long-lived stream responses will still require reserved capacity or a separate bounded streaming executor.
