@@ -240,3 +240,11 @@ Nie publikować APK jako „gotowego do instalacji” na podstawie samego CI. Wy
 - Removed the Robolectric runner annotation/imports and dependency, retaining JUnit 4.13.2 and the parser test cases. Removed the now-unneeded Android-resource unit-test option.
 - Commits: test runner removal `2aeb106939d394c953dd4f9b0d995028664296ff`; Gradle dependency cleanup `61a872ae5cc8485e4e238ca262a68e56ad05ea4f`.
 - A new CI run should be triggered by the `app/build.gradle` update. Await its terminal result; do not mark tests or APK as verified until unit tests, APK assembly and artifact upload all succeed for the same head SHA.
+
+
+### Parser refactor for deterministic JVM tests — 17.11.2026
+- Follow-up code review found that `YouTubeShareParser` still depended on Android `Uri` and `TextUtils`; plain JUnit execution would therefore encounter Android stub methods even after removing Robolectric.
+- Refactored URL validation to use `java.net.URI`, standard Java URL decoding and null/empty checks, removing Android framework dependencies from the parser. Malformed URI syntax is rejected safely.
+- Renamed the iterable overload to `extractYouTubeUrlsFromPayloads` to avoid ambiguous Java overload resolution for null inputs, updated the activity and tests, and corrected iterable test call sites.
+- Commits: pure-Java parser `a362185c6117741405f2378c71e64a119984c62c`; activity call-site `f6662565610019227b9ccc89c82206d82c64e25e`; tests `2b6ea64986a73134a7f4200239e734df92623cc1`; malformed URI handling `110a5b7b50216d1e3f8ca111b06622b750f4aa1a`; iterable test correction `dfdfec97f10084a1f432448a03132cb25f624d0b`.
+- Multiple intermediate CI runs were triggered by sequential GitHub contents commits. The authoritative verification must be the run for the final code SHA `dfdfec97f10084a1f432448a03132cb25f624d0b` (or a later code SHA), after all unit-test, assemble and artifact-upload steps finish successfully.
