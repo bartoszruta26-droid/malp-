@@ -872,3 +872,24 @@ Commit testów `c49b9a8c9b00ca8647cd867f2e3c7926422ead38` uzyskał `build-and-te
 Wcześniejsze commity pośrednie `8d06a40...` i `4096c82...` nie przeszły CI, ponieważ kolejne pliki interfejsu i implementacji były zatwierdzane osobno, zanim aktualizacja testów zakończyła migrację sygnatur callbacku. Następny kompletny commit `c49b9a8...` zawierał spójny interfejs, implementację i testy oraz przeszedł cały build i CTest.
 
 Komponent pozostaje izolowany: `HttpServer` i `POST /api/v1/queue` nie są jeszcze podłączone do leniwego rejestru. Stary aktywny `StreamSessionRegistry` nadal obsługuje istniejący testowy endpoint. Nie wykonano testu na Raspberry Pi ani nie zmieniano kolejki MPD.
+## Aktualizacja po teście anulowania resolvera (2026-11-17)
+
+Stan gałęzi `feature/youtube-audio-bridge` po commicie `dc5d174d2413cf5c0dc2f635c5ed8694184ba6f3`: GitHub Actions zakończył przebieg dla tego commita wynikiem `success`.
+
+Nowy test `testAudioUrlCancellationTerminatesProcessGroup` sprawdza anulowanie operacji `resolveAudioUrl`: osobny wątek ustawia flagę `std::atomic_bool`, resolver ma przerwać proces `yt-dlp` przed timeoutem, zwrócić `false` i pozostawić pusty wynikowy URL. Test przechodzi w CI. Interfejs resolvera przyjmuje flagę anulowania zarówno w `resolveMetadata`, jak i `resolveAudioUrl`; flaga musi żyć przez cały czas synchronicznego wywołania.
+
+Potwierdzony zakres CI obejmuje osiem zestawów testów C++/HTTP, w tym bufor RAM, walidację upstream, rejestry sesji, writer chunked, resolver, menedżer kolejki MPD, rejestr lazy i test integracyjny API. Wynik CI nie jest dowodem testu na Raspberry Pi ani kompatybilności wejścia CURL konkretnej kompilacji MPD.
+
+### Aktualny stan integracji — bez zmiany oceny gotowości
+
+- `YtDlpResolver`, `LazyStreamSessionRegistry` i `MpdQueueManager` istnieją i mają testy jednostkowe.
+- Resolver i lazy registry obsługują anulowanie procesu resolvera na poziomie interfejsu.
+- `HttpServer` nadal tworzy stary `StreamSessionRegistry`; nie korzysta jeszcze z lazy registry.
+- `GET /stream/{id}` nadal odczytuje wyłącznie sesję ze starego rejestru.
+- `POST /api/v1/queue` nadal zwraca `503 backend_not_ready`; to prawidłowe zachowanie fail-closed, dopóki nie ma kompletnego i przetestowanego przepływu.
+- `MpdQueueManager` nie jest jeszcze wywoływany przez serwer HTTP.
+- `GET /api/v1/health` nadal zgłasza `control_ready:false`.
+
+### Następna bramka techniczna
+
+Przed włączeniem kolejki należy wprowadzić kontrolowany kontekst zależności serwera (resolver, lazy registry, MPD queue manager i konfiguracja portów), przekazać flagę anulowania do resolvera metadanych, a następnie zintegrować kolejkę i obsługę strumienia. Testy muszą używać atrap resolvera i MPD oraz obejmować odrzucenia, niejednoznaczne odpowiedzi MPD, częściowy rollback, playlisty 1–200 pozycji, aktywację dopiero przy GET i shutdown. Dopiero po tych testach można rozważyć test CURL/MPD na Raspberry Pi. Nie zmieniać kolejki ani konfiguracji działającego MPD bez odrębnej zgody.
