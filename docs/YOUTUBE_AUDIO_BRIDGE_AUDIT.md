@@ -133,3 +133,13 @@ All six reported cases passed: binary FIFO transfer and cleanup; playlist reject
 - The implementation now signals the current session cancellation token during `release(id, true)`. If activation is already in progress, release leaves its reservation intact for the activation to finish. A later explicit retry receives a new uncancelled token.
 - Added a deterministic regression test that holds the resolver until cancellation, verifies release signals it, verifies overlapping activation is rejected while the resolver remains blocked, and verifies a later retry gets a fresh token.
 - The latest test commit is `36d9f70aed0bef8e9863c277165a8ad1dea28a65`. GitHub Actions was still running at the time this addendum was written. Raspberry Pi build/CTest verification is pending; do not treat this change as validated until the user reports those results.
+
+
+## Follow-up review — release after upstream start, before publication (2026-11-17)
+
+- Review found a second lifecycle edge distinct from resolver cancellation: if `release(id, true)` occurs after `HttpUpstreamStream::start()` succeeds but before the stream is published into the session entry, the release path cannot see or cancel that local stream object. The activation subsequently discards and joins it, but the previous implementation did not clear its `activating` reservation. This could leave the session permanently consuming an active-stream slot.
+- The discard path now cancels and joins the unpublished upstream first, then clears `activating` only if the session still exists and retains the same cancellation token. It does not mark an expected cancellation as a resolver failure. Erased/cleared sessions are not recreated.
+- Added a test-only post-start/pre-publication synchronization hook, unset in production, so the race can be reproduced deterministically without relying on scheduler timing or live YouTube.
+- Added regression test `testReleaseDuringStartedButUnpublishedStreamFreesReservation()`. It pauses immediately after worker start, calls `release(id, true)`, verifies a concurrent activation is rejected while the first activation owns the reservation, resumes publication, and checks that the discarded worker is joined, the slot is freed, and a fresh activation can proceed.
+- Implementation/test commits: `b854b2f2` (test seam), `06aead23` (reservation release fix), `5c202ecd` (deterministic regression test).
+- **Verification status:** source changes are pushed to `feature/youtube-audio-bridge`; GitHub Actions and Raspberry Pi build/CTest are pending. Do not treat this fix as verified until both are checked. No production binary was installed and no service was restarted.
