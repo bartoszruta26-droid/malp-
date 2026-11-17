@@ -6,6 +6,8 @@
 #include "yoinks/chunked_stream_writer.hpp"
 #include "yoinks/lazy_stream_session_registry.hpp"
 #include "yoinks/youtube_url.hpp"
+#include "yoinks/mpd_playlist_watcher.hpp"
+#include "yoinks/mpd_queue_manager.hpp"
 
 #include <boost/asio.hpp>
 #include <boost/asio/post.hpp>
@@ -22,6 +24,8 @@
 #include <functional>
 #include <cctype>
 #include <memory>
+#include <iostream>
+#include <thread>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -371,12 +375,55 @@ void HttpServer::run() {
         throw std::invalid_argument(
                 "HTTP control API is loopback-only until TLS termination is implemented");
     }
+    if (config_.playlist_watch_enabled && !config_.mpd_queue_manager) {
+        throw std::invalid_argument("MPD queue manager is required when playlist watcher is enabled");
+    }
     tcp::acceptor acceptor{context, tcp::endpoint{address, config_.port}};
+    std::atomic_bool stop_watcher{false};
     asio::signal_set signals{context, SIGINT, SIGTERM};
     signals.async_wait([&](const beast::error_code&, int) {
+        stop_watcher.store(true);
         beast::error_code ignored;
         acceptor.close(ignored);
     });
+
+    std::thread playlist_watcher;
+    if (config_.playlist_watch_enabled) {
+        playlist_watcher = std::thread([&stop_watcher, watch_config = config_.playlist_watch,
+                                        mpd = config_.mpd_queue_manager]() {
+            MpdPlaylistWatcher watcher(watch_config);
+            auto retry_delay = std::chrono::seconds(1);
+            while (!stop_watcher.load()) {
+                const auto event = watcher.waitForPlaylistChange();
+                if (stop_watcher.load()) break;
+                if (event.success) {
+                    retry_delay = std::chrono::seconds(1);
+                    if (event.playlist_changed) {
+                        const auto snapshot = mpd->listPlaylistState();
+                        if (snapshot.success) {
+                            std::clog << "yoinks-mpd: playlist observed; entries="
+                                      << snapshot.entries.size() << ", state="
+                                      << snapshot.state << '\\n';
+                        } else {
+                            std::clog << "yoinks-mpd: playlist snapshot unavailable; code="
+                                      << snapshot.error_code << '\\n';
+                        }
+                    }
+                    continue;
+                }
+                if (!event.timed_out && !event.error_code.empty()) {
+                    std::clog << "yoinks-mpd: playlist watcher reconnect; code="
+                              << event.error_code << '\\n';
+                    const auto until = std::chrono::steady_clock::now() + retry_delay;
+                    while (!stop_watcher.load()
+                            && std::chrono::steady_clock::now() < until) {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    }
+                    retry_delay = std::min(retry_delay * 2, std::chrono::seconds(10));
+                }
+            }
+        });
+    }
 
     auto accept_next = std::make_shared<std::function<void()>>();
     *accept_next = [&]() {
@@ -425,6 +472,8 @@ void HttpServer::run() {
 
     (*accept_next)();
     context.run();
+    stop_watcher.store(true);
+    if (playlist_watcher.joinable()) playlist_watcher.join();
 
     // Drain control requests first so no new stream jobs can be submitted.
     workers.join();
