@@ -746,3 +746,11 @@ Zmiany kodu: `71ab4f6` (signal-driven shutdown), `f2dc5d1` (anulowanie oczekują
 ### Następny etap
 
 Po uzyskaniu PASS dla aktualnego CI należy wykonać kontrolowany test na Raspberry Pi w osobnym katalogu tymczasowym, bez instalacji, restartu MPD i zmian kolejki. Dopiero potem kontynuować resolver yt-dlp metadanych-only z `posix_spawn`/`execve`; endpoint kolejki ma pozostać fail-closed do czasu ukończenia resolvera i MPD queue managera.
+
+### Wynik końcowy CI — chunked writer i graceful shutdown
+
+Commit `b3e6a442a336e4ca12774c5e5cedd27e9795ae04` uzyskał `build-and-test: success` w GitHub Actions (job `133915090222`, zakończony 2026-11-17 08:29:06 UTC). Build zakończył się powodzeniem, a CTest: **5/5 testów PASS** (`bounded_stream_buffer`, `http_upstream_validation`, `stream_session_registry`, `chunked_stream_writer`, `http_api_integration`). Test integracyjny obejmuje teraz również kontrolowane zakończenie procesu przez SIGTERM.
+
+Poprzedni commit `226d3fc...` miał wynik `failure` wyłącznie z powodu asercji w nowym teście rozmiaru pierwszego chunku. Asercję skorygowano w `191845f...`; ten commit uzyskał PASS, a następny przebieg `b3e6a44...` potwierdził także graceful shutdown. Błąd testu nie dotyczył kompilacji serwera.
+
+**Zakres dowodu:** CI potwierdza kompilację i testy na runnerze GitHub x86_64. Nie potwierdza jeszcze działania na Raspberry Pi, obsługi konkretnego MPD/CURL, prawdziwego źródła YouTube ani odtwarzania end-to-end.
