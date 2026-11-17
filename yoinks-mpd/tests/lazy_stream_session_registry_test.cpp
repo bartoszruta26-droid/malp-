@@ -379,19 +379,18 @@ void testRetainOnlyPreservesUnpublishedActivationAndSlotAccounting() {
         condition.wait(lock, [&] { return after_start_entered; });
     }
 
-    require(registry.activeCount() == 1 && registry.contains(first_id),
-            "the unpublished upstream must own exactly one active slot");
-    require(registry.retainOnly({}) == 0,
-            "retainOnly must preserve an in-flight unpublished activation");
-    require(registry.contains(first_id) && registry.activeCount() == 1,
-            "the retained unpublished activation must keep its capability and slot");
-
+    // Record every assertion while the activation is paused, but always release
+    // and join the worker before throwing. Otherwise a failed require() would
+    // destroy a joinable std::thread and mask the actual assertion with terminate.
+    const bool unpublished_slot_reserved =
+            registry.activeCount() == 1 && registry.contains(first_id);
+    const auto removed = registry.retainOnly({});
+    const bool retain_only_preserved =
+            registry.contains(first_id) && registry.activeCount() == 1;
     const bool second_activated_early = registry.activate(second_id,
         [](const std::string&, std::string&, const std::atomic_bool*) {
             return false;
         });
-    require(!second_activated_early,
-            "a second session must not exceed the single active-stream slot");
 
     {
         std::lock_guard<std::mutex> lock(mutex);
@@ -400,6 +399,14 @@ void testRetainOnlyPreservesUnpublishedActivationAndSlotAccounting() {
     condition.notify_all();
     worker.join();
 
+    require(unpublished_slot_reserved,
+            "the unpublished upstream must own exactly one active slot");
+    require(removed == 0,
+            "retainOnly must preserve an in-flight unpublished activation");
+    require(retain_only_preserved,
+            "the retained unpublished activation must keep its capability and slot");
+    require(!second_activated_early,
+            "a second session must not exceed the single active-stream slot");
     require(first_activated && registry.activeCount() == 1,
             "publishing the retained upstream must preserve one active slot");
     require(registry.release(first_id, true),
