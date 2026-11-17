@@ -23,12 +23,16 @@ bool validResolvedUrl(const std::string& value) {
     char* host = nullptr;
     char* user = nullptr;
     char* password = nullptr;
+    char* port = nullptr;
     bool valid = set_result == CURLUE_OK
             && curl_url_get(parsed, CURLUPART_SCHEME, &scheme, 0) == CURLUE_OK
             && std::string(scheme) == "https"
             && curl_url_get(parsed, CURLUPART_HOST, &host, 0) == CURLUE_OK
             && curl_url_get(parsed, CURLUPART_USER, &user, 0) != CURLUE_OK
             && curl_url_get(parsed, CURLUPART_PASSWORD, &password, 0) != CURLUE_OK;
+    if (valid && curl_url_get(parsed, CURLUPART_PORT, &port, 0) == CURLUE_OK) {
+        valid = std::string(port) == "443";
+    }
     if (valid) {
         std::string normalized_host(host);
         std::transform(normalized_host.begin(), normalized_host.end(),
@@ -45,6 +49,7 @@ bool validResolvedUrl(const std::string& value) {
     curl_free(host);
     curl_free(user);
     curl_free(password);
+    curl_free(port);
     curl_url_cleanup(parsed);
     return valid;
 }
