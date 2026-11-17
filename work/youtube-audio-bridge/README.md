@@ -19,7 +19,7 @@ This directory is the working area for implementation, audits, test evidence, an
 7. Preserve normal MPD queues and controls. Do not clear queues or change global single/consume modes.
 8. Never claim a build, test, or hardware validation passed unless evidence is recorded.
 
-## Work stages
+## Main audit\n\n- [Professional architecture audit and implementation plan](AUDYT_ARCHITEKTURY_I_PLAN_REALIZACJI.md) — current-state findings, target architecture, security, RAM-only controls, acceptance tests, risks, and staged delivery plan.\n\n## Work stages
 
 - [ ] W0 — Inspect current branch, repository layout, existing implementation, and build/test setup.
 - [ ] W1 — Repair and complete Android share/preferences/client integration.
