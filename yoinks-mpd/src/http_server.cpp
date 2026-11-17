@@ -376,6 +376,7 @@ void HttpServer::run() {
                     if (accept_error != asio::error::operation_aborted) {
                         beast::error_code ignored;
                         acceptor.close(ignored);
+                        signals.cancel(ignored);
                     }
                     return;
                 }
