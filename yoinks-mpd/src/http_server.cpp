@@ -109,7 +109,7 @@ http::response<http::string_body> handle(
     const auto target = request.target();
     if (request.method() == http::verb::get && target == "/api/v1/health") {
         return response(http::status::ok,
-                R"({"status":"ok","service":"yoinks-mpd","api_version":1,"control_ready":false})",
+                R"({"status":"ok","service":"yoinks-mpd","api_version":1,"control_ready":true,"media_ready":false,"mpd_playback_verified":false})",
                 request.version(), request.keep_alive());
     }
 
