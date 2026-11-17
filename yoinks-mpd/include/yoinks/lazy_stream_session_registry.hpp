@@ -41,6 +41,7 @@ public:
     std::shared_ptr<HttpUpstreamStream> findActive(const std::string& id) const;
     bool contains(const std::string& id) const;
     bool isFailed(const std::string& id) const;
+    bool release(const std::string& id, bool cancel_upstream);
     bool erase(const std::string& id);
     void clear();
     std::size_t size() const;
@@ -52,6 +53,7 @@ private:
         std::shared_ptr<HttpUpstreamStream> stream;
         bool activating{false};
         bool failed{false};
+        bool serving{false};
         std::shared_ptr<std::atomic_bool> cancellation;
     };
     static std::string generateId();
