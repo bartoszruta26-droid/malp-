@@ -457,3 +457,10 @@ No production binary installation or service restart without explicit user appro
 - Added a separate Debug sanitizer build and full CTest run to the C++ GitHub Actions workflow (`fd9a330f`). CI run `44123520539` is pending; inspect its individual steps before treating the sanitizer gate as complete.
 - After CI passes, the next target-device step is a separate sanitizer build directory, followed by the targeted lazy-session executable and full CTest. Do not overwrite `/tmp/yoinks-mpd-audit` or use the sanitizer binary as production.
 - Then add bounded lifecycle stress coverage and proceed to streaming robustness tests.
+
+
+## Bounded lifecycle stress coverage added — CI pending (2026-11-17)
+
+- Added `testConcurrentLifecycleStressMaintainsRegistryAccounting()` in commit `a2a5b046a550a6ae9fbbe9b56841188c7befb8dc`, with concurrent activation/release/reconciliation/observation workers over 16 live sessions and bounded iteration counts.
+- The test checks that all workers complete, live sessions remain retained, no activation reservations remain after joining, and clear/shutdown leave an empty registry.
+- CI run `44123745133` is pending for this exact commit. The sanitizer workflow is also being validated; check the completed workflow's sanitizer configure, build, and test steps before requesting Raspberry Pi sanitizer execution.
