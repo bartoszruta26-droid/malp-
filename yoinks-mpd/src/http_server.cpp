@@ -429,7 +429,7 @@ void HttpServer::run() {
     // Drain control requests first so no new stream jobs can be submitted.
     workers.join();
     // Cancel upstream producers and wake readers before joining stream workers.
-    sessions->clear();
+    sessions->shutdown();
     stream_workers.join();
 }
 
