@@ -45,6 +45,9 @@ public final class YouTubeBridgePreferences {
     }
 
     public static String getToken(Context context) {
+        // Remove any token left by the former plaintext preference implementation.
+        PreferenceManager.getDefaultSharedPreferences(context).edit()
+                .remove(context.getString(R.string.pref_youtube_bridge_token_key)).apply();
         SharedPreferences secure = context.getApplicationContext()
                 .getSharedPreferences(SECURE_PREFS, Context.MODE_PRIVATE);
         String wrapped = secure.getString(WRAPPED_KEY, null);
