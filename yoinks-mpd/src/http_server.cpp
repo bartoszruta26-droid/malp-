@@ -42,6 +42,68 @@ bool constantTimeEqual(const std::string& left, const std::string& right) {
     return difference == 0;
 }
 
+bool validIdentifier(const std::string& value, std::size_t minimum, std::size_t maximum) {
+    if (value.size() < minimum || value.size() > maximum) return false;
+    for (const unsigned char character : value) {
+        if (!((character >= 'a' && character <= 'z')
+                || (character >= 'A' && character <= 'Z')
+                || (character >= '0' && character <= '9')
+                || character == '_' || character == '-')) return false;
+    }
+    return true;
+}
+
+bool allowedYouTubeUrl(const std::string& value) {
+    constexpr char scheme[] = "https://";
+    if (value.compare(0, sizeof(scheme) - 1, scheme) != 0
+            || value.find('#') != std::string::npos
+            || value.find('@') != std::string::npos) return false;
+    const std::size_t authority_start = sizeof(scheme) - 1;
+    const std::size_t path_start = value.find('/', authority_start);
+    if (path_start == std::string::npos) return false;
+    const std::string host = value.substr(authority_start, path_start - authority_start);
+    if (host != "youtube.com" && host != "www.youtube.com"
+            && host != "m.youtube.com" && host != "music.youtube.com"
+            && host != "youtu.be") return false;
+
+    const std::string path_and_query = value.substr(path_start);
+    const std::size_t query_start = path_and_query.find('?');
+    const std::string path = path_and_query.substr(0, query_start);
+    const std::string query = query_start == std::string::npos
+            ? "" : path_and_query.substr(query_start + 1);
+
+    if (host == "youtu.be") {
+        return path.size() == 12 && validIdentifier(path.substr(1), 11, 11);
+    }
+    if (path == "/watch") {
+        const std::string key = "v=";
+        const std::size_t position = query.find(key);
+        if (position == std::string::npos
+                || (position != 0 && query[position - 1] != '&')) return false;
+        const std::size_t start = position + key.size();
+        const std::size_t end = query.find('&', start);
+        return validIdentifier(query.substr(start, end == std::string::npos
+                ? std::string::npos : end - start), 11, 11);
+    }
+    if (path == "/playlist") {
+        const std::string key = "list=";
+        const std::size_t position = query.find(key);
+        if (position == std::string::npos
+                || (position != 0 && query[position - 1] != '&')) return false;
+        const std::size_t start = position + key.size();
+        const std::size_t end = query.find('&', start);
+        return validIdentifier(query.substr(start, end == std::string::npos
+                ? std::string::npos : end - start), 10, 128);
+    }
+    for (const std::string prefix : {"/shorts/", "/live/", "/embed/"}) {
+        if (path.compare(0, prefix.size(), prefix) == 0) {
+            return path.size() == prefix.size() + 11
+                    && validIdentifier(path.substr(prefix.size()), 11, 11);
+        }
+    }
+    return false;
+}
+
 std::string bearerValue(const http::request<http::string_body>& request) {
     const auto value = request[http::field::authorization];
     constexpr char prefix[] = "Bearer ";
@@ -97,6 +159,12 @@ http::response<http::string_body> handle(
                 || !body.contains("mode") || !body["mode"].is_string()) {
             return response(http::status::bad_request,
                     R"({"success":false,"error":{"code":"invalid_request","message":"url and mode are required"}})",
+                    request.version());
+        }
+        const std::string youtube_url = body["url"].get<std::string>();
+        if (!allowedYouTubeUrl(youtube_url)) {
+            return response(http::status::unprocessable_entity,
+                    R"({"success":false,"error":{"code":"invalid_url","message":"Unsupported URL"}})",
                     request.version());
         }
         const std::string mode = body["mode"].get<std::string>();
