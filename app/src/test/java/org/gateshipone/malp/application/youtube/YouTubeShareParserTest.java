@@ -1,11 +1,14 @@
 package org.gateshipone.malp.application.youtube;
 
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.robolectric.RobolectricTestRunner;
 
 import java.util.List;
 
 import static org.junit.Assert.*;
 
+@RunWith(RobolectricTestRunner.class)
 public class YouTubeShareParserTest {
     @Test public void extractsWatchUrlFromSharedText() {
         List<String> urls = YouTubeShareParser.extractYouTubeUrls(
