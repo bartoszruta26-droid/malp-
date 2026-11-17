@@ -221,7 +221,6 @@ void serveStream(beast::tcp_stream& stream, const std::string& id,
             11);
         stream.expires_after(std::chrono::seconds(5));
         http::write(stream, reply, error);
-        if (failed) sessions->erase(id);
         return;
     }
     const auto upstream = sessions->findActive(id);
@@ -230,7 +229,7 @@ void serveStream(beast::tcp_stream& stream, const std::string& id,
             R"({"success":false,"error":{"code":"stream_unavailable","message":"Media stream is unavailable"}})", 11);
         stream.expires_after(std::chrono::seconds(5));
         http::write(stream, reply, error);
-        sessions->erase(id);
+        sessions->release(id, true);
         return;
     }
     http::response<http::empty_body> header{http::status::ok, 11};
@@ -243,7 +242,7 @@ void serveStream(beast::tcp_stream& stream, const std::string& id,
     http::response_serializer<http::empty_body> serializer{header};
     stream.expires_after(std::chrono::seconds(10));
     http::write_header(stream, serializer, error);
-    if (error) { sessions->erase(id); return; }
+    if (error) { sessions->release(id, true); return; }
 
     writeChunkedStream(
         [&](std::uint8_t* destination, std::size_t maximum) {
@@ -255,7 +254,7 @@ void serveStream(beast::tcp_stream& stream, const std::string& id,
             asio::write(stream, asio::buffer(data, size), error);
             return !error;
         });
-    sessions->erase(id);
+    sessions->release(id, error || upstream->state() != UpstreamState::completed);
 }
 
 bool serveConnection(tcp::socket socket, const std::string& token,
@@ -320,7 +319,7 @@ bool serveConnection(tcp::socket socket, const std::string& token,
                      active_connections]() mutable {
                         beast::error_code stream_error;
                         try { serveStream(stream, id, sessions, resolver); }
-                        catch (...) { sessions->erase(id); }
+                        catch (...) { sessions->release(id, true); }
                         stream.socket().shutdown(tcp::socket::shutdown_both, stream_error);
                         stream.socket().close(stream_error);
                         active_streams->fetch_sub(1);
@@ -329,7 +328,6 @@ bool serveConnection(tcp::socket socket, const std::string& token,
                 return true;
             } catch (...) {
                 active_streams->fetch_sub(1);
-                sessions->erase(id);
                 throw;
             }
         }
