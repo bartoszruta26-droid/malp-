@@ -13,8 +13,14 @@ namespace yoinks {
 
 StreamSessionRegistry::StreamSessionRegistry(StreamSessionRegistryConfig config)
     : config_(config) {
+    constexpr std::size_t kMaximumAggregateBufferBytes = 8 * 1024 * 1024;
     if (config_.maximum_sessions == 0 || config_.maximum_sessions > 32) {
         throw std::invalid_argument("maximum stream sessions must be between 1 and 32");
+    }
+    if (config_.upstream.buffer_capacity == 0
+            || config_.upstream.buffer_capacity
+                    > kMaximumAggregateBufferBytes / config_.maximum_sessions) {
+        throw std::invalid_argument("aggregate stream RAM buffers must not exceed 8 MiB");
     }
 }
 
