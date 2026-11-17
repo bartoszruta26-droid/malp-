@@ -8,12 +8,12 @@ Finish the existing `feature/youtube-audio-bridge` implementation so MALP can sh
 
 ## Current audited state
 
-- The feature branch contains a YouTube URL parser, bridge preferences, and an Android HTTP client.
-- It previously contained a named-pipe producer prototype and its tests; these have now been removed. The remaining installer provisions yt-dlp only, while the HTTP proxy service is still to be implemented.
-- No named-pipe transport or producer test is part of the accepted design. The required media transport is HTTP proxy only.
-- `MainActivity.java` currently contains literal backslash-n sequences in its import list and calls `handleIncomingShare(getIntent())`, but no implementation of that method was found in the file. The Android share path is therefore incomplete and must not be presented as working.
-- The Android HTTP client expects `POST /api/v1/resolve`, but no matching Raspberry Pi HTTP API/proxy service is implemented yet.
-- Playlist expansion, authenticated request handling, MPD queue insertion, cancellation coordination, and successful end-to-end playback remain unimplemented/unverified.
+- The Android application contains the YouTube share parser/client path and CI unit/build coverage; the latest Android emulator smoke-test state must be checked against its own current workflow run before distributing an APK.
+- The Raspberry Pi side now contains the C++ HTTP bridge, authenticated control API, yt-dlp resolver, lazy local stream sessions, bounded RAM buffering, and MPD queue integration.
+- The MPD queue stores stable local proxy URIs; playlist entries are expanded into separate ordered items. Integration tests use an isolated mock MPD and deterministic fixtures.
+- The latest registry-lock fix is commit `2f40a5f8f3c5fc438d0462e9b44961126bbee8dd`. The user built it on the Raspberry Pi and reported **11/11 CTest tests passing**. GitHub Actions run `44104070635` for the exact commit also succeeded.
+- The production service remained active and its binary hash unchanged during this verification. The test build was not installed and the production service was not restarted.
+- Still unverified: a live YouTube/CDN stream on the target Pi, audible playback through the actual audio output, long-duration RAM-only behavior including swap/storage tracing, and a deterministic test of the narrow post-start/pre-publication cancellation race.
 
 ## MPD CURL compatibility gate
 
