@@ -124,6 +124,6 @@ else
   info "nie wykryto polecenia mpd; nie instalowano MPD"
 fi
 
-info "UWAGA: test online potwierdza wyłącznie rozpoznanie filmu. To wydanie Yoinks-MPD jest nadal szkieletem API; nie ma gotowego endpointu strumienia HTTP ani integracji kolejki MPD."
+info "UWAGA: test online potwierdza wyłącznie rozpoznanie filmu. Endpoint /stream istnieje, ale nie jest jeszcze połączony z zaufanym resolverem ani kolejką MPD; odtwarzanie end-to-end nie jest gotowe."
 info "Skrypt nie tworzy ani nie uruchamia usługi systemd, nie zmienia konfiguracji MPD, nie czyści kolejki i nie zapisuje mediów na dysku."
 info "Transport mediów pozostaje wyłącznie HTTP proxy; żadne FIFO, potoki nazwane ani pliki audio nie są używane."
