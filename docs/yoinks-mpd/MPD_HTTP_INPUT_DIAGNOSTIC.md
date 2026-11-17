@@ -2,7 +2,7 @@
 
 ## Purpose and safety
 
-This procedure closes the MPD compatibility gate (W1). The selected architecture uses a local C++ HTTP relay and MPD CURL input. The existing FIFO producer is not the target transport.
+This procedure closes the MPD compatibility gate (W1). The selected architecture uses a local C++ HTTP relay and MPD CURL input. The proxy-to-MPD media path is HTTP only.
 
 The evidence collector is read-only: it does not connect to the running MPD daemon, modify its queue, start playback, change configuration, or write audio. Run it without root if the current account can inspect the installation.
 
