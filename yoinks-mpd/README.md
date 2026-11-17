@@ -26,7 +26,7 @@ ctest --test-dir yoinks-mpd/build --output-on-failure
 
 - Bounded HTTPS upstream producer to RAM, random stream-session registry and local chunked HTTP endpoint `/stream/{opaque-id}`.
 - Control API routing and Bearer token verification.
-- yt-dlp resolver and playlist expansion.
+- Wiring the yt-dlp resolver into the queue API and playlist expansion policy.
 - MPD protocol queue manager.
 - Resolver-driven source URL refresh remains pending; sessions can currently be created only by trusted internal code.
 - systemd service, resource limits and Raspberry Pi installation.
@@ -76,3 +76,10 @@ The HTTP endpoint and its unit-tested `writeChunkedStream` helper share the same
 ## Server shutdown
 
 The listener uses asynchronous accept and handles SIGINT/SIGTERM through Boost.Asio. Shutdown closes the listener, drains control workers so no additional stream tasks can be submitted, cancels all registered upstream sessions to wake blocked RAM-buffer readers, and then joins the dedicated stream workers. The HTTP integration test exercises SIGTERM shutdown. This lifecycle path still requires successful CI and device-level verification.
+
+
+## yt-dlp resolver component — integration pending
+
+A C++17 `YtDlpResolver` component now launches the absolute yt-dlp executable with `posix_spawn` and an argv vector; it never invokes a shell. Metadata mode uses `--skip-download`, `--flat-playlist`, `--playlist-end` (hard-capped at 200), `--dump-single-json`, `--ignore-config` and `--no-cache-dir`. Direct audio URL mode uses `--get-url` and `--skip-download`, then accepts only HTTPS URLs within the `googlevideo.com` host boundary. Both modes have process timeouts, process-group termination, bounded stdout/stderr and non-sensitive error codes; signed URLs and stderr are not logged.
+
+The resolver is a tested library component, not yet connected to `POST /api/v1/queue` or the session registry. The queue endpoint must continue returning 503 until resolver/session lifecycle and MPD queue management are integrated. Unit tests use temporary fixture executables and do not contact YouTube or download media.
