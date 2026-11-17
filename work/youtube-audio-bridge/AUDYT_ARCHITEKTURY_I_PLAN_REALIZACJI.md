@@ -118,7 +118,7 @@ Audyt wykonano na plikach gałęzi `feature/youtube-audio-bridge`. Poniższe obs
 
 ## 4. Decyzja architektoniczna
 
-### 4.1 Zalecany wariant: lokalny HTTP relay w C++
+### 4.1 Obowiązujący wariant: lokalny HTTP proxy w C++
 
 Decyzja jest jednoznaczna: jedynym dozwolonym transportem mediów jest lokalny HTTP proxy w C++ do wejścia CURL MPD. Nie projektować ani nie wdrażać alternatywnego transportu mediów.
 
@@ -472,7 +472,7 @@ Nie scalać do gałęzi głównej, dopóki:
 |---|---|---|
 | W0 | Ujednolicenie dokumentacji i ADR | Zakończono: HTTP proxy jest jedynym transportem; historyczny prototyp i testy usunięto |
 | W1 | Dowód MPD CURL input | Wynik z dokładnej wersji MPD na Raspberry Pi |
-| W2 | Specyfikacja API i bezpieczeństwa | Kontrakt endpointów, JSON, kody błędów, token, limity |
+| W2 | Specyfikacja API i bezpieczeństwa | SPECYFIKACJA UTWORZONA: `docs/yoinks-mpd/API_CONTRACT_V1.md`; testy i implementacja pozostają otwarte |
 | W3 | C++ service skeleton | Uruchamianie, konfiguracja, logowanie bez sekretów, systemd |
 | W4 | Resolver yt-dlp | Metadane i playlisty bez pobierania audio |
 | W5 | HTTP relay RAM-only | Stabilne URI, ograniczony bufor, back-pressure, anulowanie |
