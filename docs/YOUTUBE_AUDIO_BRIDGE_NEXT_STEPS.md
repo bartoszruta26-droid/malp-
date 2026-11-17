@@ -279,3 +279,13 @@ Nie publikować APK jako „gotowego do instalacji” na podstawie samego CI. Wy
 - New CI run: `44085605457`, associated with commit `747c442bcea207cd52b414b12598a5a476d833cc`. At audit update time it was still in progress. Do not mark emulator testing as passed or distribute an APK from this run until the job succeeds and the artifact is present.
 - The previous successful APK artifact `44079384696` predates the emulator smoke-test correction and is not the latest verified build. Do not present it as the current installable release.
 - No Raspberry Pi runtime test, production MPD modification, TLS deployment, or successful YouTube playback test was performed.
+
+ 
+## HTTP → yt-dlp → proxy → MPD integration-test expansion — 2026-11-17
+
+- Added a dedicated C++ mock MPD fixture bound only to loopback and used only by CI integration tests. It records MPD commands and returns deterministic MPD protocol replies; it is not part of the Raspberry Pi service or installer.
+- Replaced the previous HTTP integration test's expected closed-port 503 with a successful control-plane path: authenticated HTTP queue request → deterministic yt-dlp metadata fixture → lazy opaque local stream URI → MPD playlistinfo reconciliation → MPD addid.
+- The test asserts HTTP 200, one queued item, and that MPD receives only a local http://127.0.0.1:<port>/stream/<opaque-id> URI; YouTube/CDN URLs must never be inserted into MPD.
+- The test then requests the queued local stream URI. The yt-dlp fixture is invoked in --get-url mode and deliberately returns a disallowed host; the proxy must reject activation with 502. This verifies lazy resolver invocation and the CDN host security gate without internet access or media downloads.
+- This is not yet a successful media-byte relay test: no valid HTTPS googlevideo upstream is served by the fixture, and no MPD CURL playback is claimed. The next test increment must provide a deterministic, TLS-verified upstream seam and verify actual chunk bytes through the proxy, while retaining production host validation.
+- No Android source or APK was changed or built. No production MPD instance, queue, configuration, or Raspberry Pi was touched.
