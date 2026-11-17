@@ -497,3 +497,12 @@ No production binary installation or service restart without explicit user appro
 - Test otrzymuje teraz sygnał z testowego punktu kontrolnego wywoływanego po ustawieniu bramki shutdown pod mutexem rejestru. Po zakończeniu mutacji i potwierdzeniu bramki zwalnia aktywację, łączy wątki i sprawdza odrzucenie nowej sesji.
 - Wymagane: CI Release + ASan/UBSan oraz uruchomienie na Raspberry Pi. Do tego czasu sanitizer gate pozostaje otwarty.
 - DNS/SSRF pozostaje odłożone na wyraźne polecenie użytkownika.
+
+
+## Streaming robustness — deterministic buffer back-pressure tests (2026-11-17)
+
+- CI run `44136751848` passed for lifecycle test commit `0908495c`: normal CTest 11/11 and ASan/UBSan CTest 11/11.
+- Next code step: make bounded-buffer tests deterministic by signaling when a producer is actually blocked at capacity; verify both consumer-drain recovery and cancellation wake-up.
+- The test callback is optional and unset in production. It executes while the buffer mutex is held and therefore may only signal an independent test condition.
+- After this code change passes CI, run normal and sanitizer builds on Raspberry Pi before moving to HTTP client-disconnect/slow-consumer integration tests.
+- DNS/IP SSRF remains deferred at the user's request. No production installation or service restart.
