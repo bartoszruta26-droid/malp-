@@ -75,6 +75,7 @@ YoutubeQueueServiceResult YoutubeQueueService::enqueue(
         return result;
     }
     result.success = true;
+    result.started = play_now;
     result.queued = queued.queued;
     return result;
 }
