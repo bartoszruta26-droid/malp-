@@ -98,16 +98,29 @@ public final class YouTubeBridgePreferences {
         if (baseUrl == null || !baseUrl.trim().startsWith("https://") || token == null) {
             throw new IllegalArgumentException("HTTPS bridge URL and token are required");
         }
-        PreferenceManager.getDefaultSharedPreferences(context).edit()
-                .putString(context.getString(R.string.pref_youtube_bridge_url_key), baseUrl.trim())
-                .remove(context.getString(R.string.pref_youtube_bridge_token_key))
-                .apply();
-
+        final String trimmedUrl = baseUrl.trim();
+        final String trimmedToken = token.trim();
         SharedPreferences secure = context.getApplicationContext()
                 .getSharedPreferences(SECURE_PREFS, Context.MODE_PRIVATE);
-        if (token.trim().isEmpty()) {
+
+        if (trimmedToken.isEmpty()) {
+            PreferenceManager.getDefaultSharedPreferences(context).edit()
+                    .putString(context.getString(R.string.pref_youtube_bridge_url_key), trimmedUrl)
+                    .remove(context.getString(R.string.pref_youtube_bridge_token_key))
+                    .apply();
             secure.edit().remove(WRAPPED_KEY).remove(IV).remove(CIPHERTEXT).apply();
             return;
+        }
+
+        if (trimmedToken.length() < 43 || trimmedToken.length() > 128) {
+            throw new IllegalArgumentException("Bridge token must be 43-128 base64url characters");
+        }
+        for (int i = 0; i < trimmedToken.length(); i++) {
+            char c = trimmedToken.charAt(i);
+            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+                    || (c >= '0' && c <= '9') || c == '_' || c == '-')) {
+                throw new IllegalArgumentException("Bridge token contains invalid characters");
+            }
         }
 
         try {
@@ -133,6 +146,10 @@ public final class YouTubeBridgePreferences {
                     .putString(WRAPPED_KEY, Base64.encodeToString(wrappedKey, Base64.NO_WRAP))
                     .putString(IV, Base64.encodeToString(iv, Base64.NO_WRAP))
                     .putString(CIPHERTEXT, Base64.encodeToString(ciphertext, Base64.NO_WRAP))
+                    .apply();
+            PreferenceManager.getDefaultSharedPreferences(context).edit()
+                    .putString(context.getString(R.string.pref_youtube_bridge_url_key), trimmedUrl)
+                    .remove(context.getString(R.string.pref_youtube_bridge_token_key))
                     .apply();
         } catch (Exception error) {
             throw new IllegalStateException("Unable to protect bridge token with Android Keystore", error);
