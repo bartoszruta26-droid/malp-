@@ -187,3 +187,9 @@ The local HTTP proxy is a streaming relay, not a download manager. It must strea
 - Commits: `e3d8309c27735910607e0fc6aa96fcf5cced93de` (activity), `d26d38cab407e46fa27432808919989efbe4c30d` (manifest), `bc54a4f4e74c6306690d63a8d4cbc00085b75eb4` (tests).
 - CI runs `44074441626`, `44074465965` and `44074498551` were launched for the three consecutive Android commits. Their outcomes must be inspected separately; a later queued run is the complete-tree verification.
 - Legacy global cleartext HTTP remains unchanged pending a complete audit of MALP's existing MPD HTTP and artwork endpoints. The YouTube bridge itself continues to enforce HTTPS and rejects redirects.
+
+
+### Android ACTION_SEND_MULTIPLE CI correction — 2026-11-17
+- First Android CI runs for the change failed at `compileDebugJavaWithJavac`: `MainActivity` used `ArrayList` without importing it.
+- Added `java.util.ArrayList` to `MainActivity.java` in commit `db00d37f5257711073e44f88c7e4a661d287bba1`.
+- A fresh Android CI run `44074664171` is validating that corrected source. Do not mark the Android change verified until this run reaches a terminal result with successful APK assembly/artifact upload.
