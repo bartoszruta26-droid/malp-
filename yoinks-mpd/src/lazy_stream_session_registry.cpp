@@ -119,18 +119,25 @@ bool LazyStreamSessionRegistry::activate(const std::string& id, const ResolveAud
         return false;
     }
 
+    bool discard_stream = false;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         const auto found = sessions_.find(id);
         if (found == sessions_.end() || cancellation->load()) {
-            stream->cancel();
-            stream->wait();
-            return false;
+            discard_stream = true;
+        } else {
+            found->second.stream = stream;
+            found->second.activating = false;
+            found->second.failed = false;
+            found->second.serving = true;
         }
-        found->second.stream = std::move(stream);
-        found->second.activating = false;
-        found->second.failed = false;
-        found->second.serving = true;
+    }
+    if (discard_stream) {
+        // Never join a network worker while holding the registry mutex.
+        // DNS/TLS setup can take up to the configured connect timeout.
+        stream->cancel();
+        stream->wait();
+        return false;
     }
     return true;
 }
