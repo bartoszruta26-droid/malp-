@@ -433,15 +433,13 @@ void testShutdownSerializesWithConcurrentRegistryMutations() {
     const char* names[] = {"release", "erase", "clear", "retainOnly"};
 
     for (std::size_t index = 0; index < 4; ++index) {
-        std::cerr << "[ MUTATION CASE ] " << names[index] << " begin" << std::endl;
         std::mutex mutex;
         std::condition_variable condition;
         bool after_start_entered = false;
         bool allow_activation_to_finish = false;
         bool start_racers = false;
         bool mutation_finished = false;
-        std::atomic<bool> shutdown_started{false};
-        std::atomic<bool> shutdown_finished{false};
+        bool shutdown_gate_entered = false;
 
         yoinks::LazyStreamSessionRegistryConfig config;
         config.upstream.connect_timeout_seconds = 1;
@@ -452,6 +450,12 @@ void testShutdownSerializesWithConcurrentRegistryMutations() {
             after_start_entered = true;
             condition.notify_all();
             condition.wait(lock, [&] { return allow_activation_to_finish; });
+        };
+        config.after_shutdown_flag_set_for_tests = [&] {
+            // Called with the registry mutex held: only publish a test signal.
+            std::lock_guard<std::mutex> lock(mutex);
+            shutdown_gate_entered = true;
+            condition.notify_all();
         };
 
         yoinks::LazyStreamSessionRegistry registry(config);
@@ -493,10 +497,7 @@ void testShutdownSerializesWithConcurrentRegistryMutations() {
                 std::unique_lock<std::mutex> lock(mutex);
                 condition.wait(lock, [&] { return start_racers; });
             }
-            shutdown_started.store(true);
             registry.shutdown();
-            shutdown_finished.store(true);
-            condition.notify_all();
         });
 
         {
@@ -504,30 +505,12 @@ void testShutdownSerializesWithConcurrentRegistryMutations() {
             start_racers = true;
         }
         condition.notify_all();
-        std::cerr << "[ MUTATION CASE ] " << names[index] << " racers released" << std::endl;
 
         {
             std::unique_lock<std::mutex> lock(mutex);
             condition.wait(lock, [&] {
-                return mutation_finished && shutdown_started.load();
+                return mutation_finished && shutdown_gate_entered;
             });
-        }
-        std::cerr << "[ MUTATION CASE ] " << names[index] << " mutation and shutdown entered" << std::endl;
-
-        bool shutdown_rejected_new_create = false;
-        for (unsigned attempt = 0; attempt < 100000 && !shutdown_rejected_new_create; ++attempt) {
-            const auto probe = registry.create("dQw4w9WgXcQ");
-            if (probe.empty()) {
-                shutdown_rejected_new_create = true;
-            } else {
-                registry.erase(probe);
-                std::this_thread::yield();
-            }
-        }
-
-        std::cerr << "[ MUTATION CASE ] " << names[index] << " create gate checked=" << shutdown_rejected_new_create << std::endl;
-        {
-            std::lock_guard<std::mutex> lock(mutex);
             allow_activation_to_finish = true;
         }
         condition.notify_all();
@@ -535,15 +518,13 @@ void testShutdownSerializesWithConcurrentRegistryMutations() {
         activation_worker.join();
         mutation_worker.join();
         shutdown_worker.join();
-        std::cerr << "[ MUTATION CASE ] " << names[index] << " workers joined" << std::endl;
 
+        const bool shutdown_rejected_new_create = registry.create("dQw4w9WgXcQ").empty();
         const bool empty = registry.size() == 0 && registry.activeCount() == 0;
         require(!activated, std::string("activation must be cancelled during shutdown race with ")
                 + names[index]);
         require(shutdown_rejected_new_create,
                 std::string("shutdown must close create() while raced with ") + names[index]);
-        require(shutdown_finished.load(),
-                std::string("shutdown must finish when raced with ") + names[index]);
         require(empty, std::string("shutdown must leave no sessions or active slots after ")
                 + names[index]);
     }

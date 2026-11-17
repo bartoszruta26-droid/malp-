@@ -1,0 +1,36 @@
+# Example reverse proxy for the loopback-only Yoinks-MPD control API.
+# Replace the hostname and certificate paths before enabling this file.
+server {
+    listen 443 ssl;
+    server_name bridge.example.invalid;
+
+    ssl_certificate     /etc/letsencrypt/live/bridge.example.invalid/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/bridge.example.invalid/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    client_max_body_size 16k;
+    client_body_timeout 15s;
+
+    # Media streams are consumed by MPD through loopback, never by remote clients.
+    location ^~ /stream/ {
+        return 404;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:8788;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Connection "";
+
+        # Preserve progressive delivery and prohibit proxy media temp files/cache.
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_cache off;
+        proxy_max_temp_file_size 0;
+        proxy_read_timeout 90s;
+        proxy_send_timeout 30s;
+    }
+}

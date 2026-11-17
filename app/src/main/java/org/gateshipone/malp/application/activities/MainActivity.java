@@ -47,6 +47,7 @@ import android.widget.RelativeLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.ActionBarDrawerToggle;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.Toolbar;
@@ -96,6 +97,13 @@ import org.gateshipone.malp.application.fragments.serverfragments.TagSelectFragm
 import org.gateshipone.malp.application.utils.PermissionHelper;
 import org.gateshipone.malp.application.utils.ThemeUtils;
 import org.gateshipone.malp.application.views.CurrentPlaylistView;
+import org.gateshipone.malp.application.youtube.YouTubeShareParser;
+import org.gateshipone.malp.application.youtube.YouTubeAudioBridgeClient;
+import org.gateshipone.malp.application.youtube.YouTubeBridgePreferences;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.gateshipone.malp.application.views.NowPlayingView;
 import org.gateshipone.malp.mpdservice.ConnectionManager;
 import org.gateshipone.malp.mpdservice.handlers.MPDConnectionStateChangeHandler;
@@ -155,44 +163,22 @@ public class MainActivity extends GenericActivity
     protected void onCreate(Bundle savedInstanceState) {
         boolean switchToSettings = false;
 
-        // restore drag state
+        // Resolve incoming shares after the Activity is initialized. YouTube links
+        // are handled by the local Raspberry Pi bridge; ordinary URLs retain the
+        // existing MPD external-stream behavior.
         if (savedInstanceState != null) {
             mSavedNowPlayingDragStatus = DRAG_STATUS.values()[savedInstanceState.getInt(MAINACTIVITY_SAVED_INSTANCE_NOW_PLAYING_DRAG_STATUS)];
             mSavedNowPlayingViewSwitcherStatus = VIEW_SWITCHER_STATUS.values()[savedInstanceState.getInt(MAINACTIVITY_SAVED_INSTANCE_NOW_PLAYING_VIEW_SWITCHER_CURRENT_VIEW)];
         } else {
-            // if no savedInstanceState is present the activity is started for the first time so check the intent
             final Intent intent = getIntent();
-
             if (intent != null) {
-                // odyssey was opened by widget or notification
                 final Bundle extras = intent.getExtras();
-
                 if (extras != null) {
                     REQUESTEDVIEW requestedView = REQUESTEDVIEW.values()[extras.getInt(MAINACTIVITY_INTENT_EXTRA_REQUESTEDVIEW, REQUESTEDVIEW.NONE.ordinal())];
                     switch (requestedView) {
-                        case NONE:
-                            break;
-                        case NOWPLAYING:
-                            mShowNPV = true;
-                            break;
-                        case SETTINGS:
-                            switchToSettings = true;
-                            break;
-                    }
-
-                    if (Intent.ACTION_SEND.equals(intent.getAction())) {
-                        String textData = extras.getString(Intent.EXTRA_TEXT);
-                        if (textData != null && !textData.isBlank()) {
-                            // try to parse it as a URL
-                            try {
-                                URL url = new URL(textData);
-                                mConnectionStateListener = new ServerConnectionListener(url.toString(), getMainLooper());
-                                MPDInterface.getGenericInstance().addMPDConnectionStateChangeListener(mConnectionStateListener);
-                            }
-                            catch (MalformedURLException ignored) {
-                                // ignored
-                            }
-                        }
+                        case NONE: break;
+                        case NOWPLAYING: mShowNPV = true; break;
+                        case SETTINGS: switchToSettings = true; break;
                     }
                 }
             }
@@ -293,6 +279,95 @@ public class MainActivity extends GenericActivity
 
         mCollapsingImage = findViewById(R.id.collapsing_image);
         mCollapsingImageLayout = findViewById(R.id.appbar_image_layout);
+
+        handleIncomingShare(getIntent());
+
+    }
+
+
+    private static final ExecutorService YOUTUBE_BRIDGE_EXECUTOR =
+            Executors.newSingleThreadExecutor();
+
+    private void handleIncomingShare(@Nullable Intent intent) {
+        if (intent == null) return;
+        final String action = intent.getAction();
+        final List<String> urls;
+        if (Intent.ACTION_SEND.equals(action)) {
+            urls = YouTubeShareParser.extractYouTubeUrls(
+                    intent.getStringExtra(Intent.EXTRA_TEXT));
+        } else if (Intent.ACTION_SEND_MULTIPLE.equals(action)) {
+            Bundle extras = intent.getExtras();
+            if (extras == null) return;
+            // Android shares may provide EXTRA_TEXT as a CharSequence or as a
+            // list of text payloads depending on the sending application.
+            Object sharedPayload = extras.get(Intent.EXTRA_TEXT);
+            if (sharedPayload instanceof CharSequence) {
+                urls = YouTubeShareParser.extractYouTubeUrls(sharedPayload.toString());
+            } else if (sharedPayload instanceof Iterable<?>) {
+                urls = YouTubeShareParser.extractYouTubeUrlsFromPayloads((Iterable<?>) sharedPayload);
+            } else {
+                return;
+            }
+        } else {
+            return;
+        }
+
+        if (urls.isEmpty()) return;
+        if (urls.size() != 1) {
+            Snackbar.make(findViewById(R.id.drawer_layout),
+                    R.string.youtube_share_multiple_links_unsupported, Snackbar.LENGTH_LONG).show();
+            return;
+        }
+        if (!YouTubeBridgePreferences.isConfigured(this)) {
+            Snackbar.make(findViewById(R.id.drawer_layout),
+                    R.string.youtube_bridge_not_configured, Snackbar.LENGTH_LONG).show();
+            return;
+        }
+        final String url = urls.get(0);
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.youtube_share_dialog_title)
+                .setMessage(R.string.youtube_share_dialog_message)
+                .setNegativeButton(R.string.dialog_action_cancel, null)
+                .setPositiveButton(R.string.youtube_share_enqueue,
+                        (dialog, which) -> resolveYouTubeShare(url, "enqueue"))
+                .setNeutralButton(R.string.youtube_share_play_now,
+                        (dialog, which) -> resolveYouTubeShare(url, "play_now"))
+                .show();
+    }
+
+    private void resolveYouTubeShare(final String url, final String mode) {
+        final String baseUrl = YouTubeBridgePreferences.getBaseUrl(this);
+        final String token = YouTubeBridgePreferences.getToken(this);
+        Snackbar.make(findViewById(R.id.drawer_layout),
+                R.string.youtube_bridge_resolving, Snackbar.LENGTH_SHORT).show();
+        YOUTUBE_BRIDGE_EXECUTOR.execute(() -> {
+            try {
+                YouTubeAudioBridgeClient.Result result =
+                        new YouTubeAudioBridgeClient(baseUrl, token).queue(url, mode);
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    String message = result.started
+                            ? "Rozpoczęto odtwarzanie; dodano " + result.queued + " pozycji."
+                            : "Dodano do kolejki " + result.queued + " pozycji.";
+                    Snackbar.make(findViewById(R.id.drawer_layout), message,
+                            Snackbar.LENGTH_LONG).show();
+                });
+            } catch (Exception error) {
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    String message = error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
+                    Snackbar.make(findViewById(R.id.drawer_layout),
+                            getString(R.string.youtube_bridge_error, message), Snackbar.LENGTH_LONG).show();
+                });
+            }
+        });
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleIncomingShare(intent);
     }
 
     @Override

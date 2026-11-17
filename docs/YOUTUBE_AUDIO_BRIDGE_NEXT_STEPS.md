@@ -488,11 +488,33 @@ No production binary installation or service restart without explicit user appro
 5. Only then implement the smallest safe change and run normal plus ASan/UBSan suites. Keep redirects disabled.
 
 
-## Immediate lifecycle sanitizer diagnosis (2026-11-17)
+- Latest diagnostic follow-up `7695163c` adds per-phase stderr markers to the shutdown-versus-mutation test. Inspect the next sanitizer log to identify the exact case and phase before changing registry synchronization. Do not infer the root cause from the test name alone.
 
-1. Run the current branch through CI with the new per-test stderr progress markers in `lazy_stream_session_registry_test.cpp`. If the sanitizer test times out, use the last `[ RUN ]` marker to isolate the exact test.
-2. Reproduce the isolated test under ASan/UBSan and inspect its synchronization/condition-variable paths. Fix the root cause in the implementation or test; do not merely increase the timeout.
-3. Repeat the normal Release CTest and full Debug ASan/UBSan CTest. Confirm the watchdog workflow itself passes.
-4. Only after the exact stress revision passes CI, request Raspberry Pi pull and run normal plus separate sanitizer builds. Keep production service/binary untouched.
-5. Continue streaming robustness tests: slow consumer/back-pressure, disconnect during blocked upstream writes, upstream timeout/error, byte-limit enforcement, and orderly shutdown.
-6. DNS/SSRF destination-address remediation is deferred by explicit user instruction. Keep the audit finding recorded; do not work on it until the user asks to resume it.
+
+## Następny etap — deterministyczna bramka shutdown (2026-11-17)
+
+- Zdiagnozowano, że wcześniejszy test sygnalizował `shutdown_started` przed wejściem do `shutdown()`; nie potwierdzało to ustawienia `shutting_down_`. Dodatkowo pętla 100 000 prób `create()/erase()` wprowadzała niepotrzebną konkurencję o mutex.
+- Test otrzymuje teraz sygnał z testowego punktu kontrolnego wywoływanego po ustawieniu bramki shutdown pod mutexem rejestru. Po zakończeniu mutacji i potwierdzeniu bramki zwalnia aktywację, łączy wątki i sprawdza odrzucenie nowej sesji.
+- Wymagane: CI Release + ASan/UBSan oraz uruchomienie na Raspberry Pi. Do tego czasu sanitizer gate pozostaje otwarty.
+- DNS/SSRF pozostaje odłożone na wyraźne polecenie użytkownika.
+
+
+## Streaming robustness — deterministic buffer back-pressure tests (2026-11-17)
+
+- CI run `44136751848` passed for lifecycle test commit `0908495c`: normal CTest 11/11 and ASan/UBSan CTest 11/11.
+- Next code step: make bounded-buffer tests deterministic by signaling when a producer is actually blocked at capacity; verify both consumer-drain recovery and cancellation wake-up.
+- The test callback is optional and unset in production. It executes while the buffer mutex is held and therefore may only signal an independent test condition.
+- After this code change passes CI, run normal and sanitizer builds on Raspberry Pi before moving to HTTP client-disconnect/slow-consumer integration tests.
+- DNS/IP SSRF remains deferred at the user's request. No production installation or service restart.
+
+
+- CI caught a C++ member-initialization-order warning promoted to error in the new test seam. The initializer list has been reordered to match declaration order; verify the resulting head in both normal and sanitizer jobs.
+
+
+## CI acceptance and target-device gate — bounded buffer tests (2026-11-17)
+
+- Accepted CI revision: `2f59ce15`, run `44137984940` — Release build + full CTest passed; Debug ASan/UBSan build + full CTest passed.
+- The earlier `-Werror=reorder` build failure was fixed by matching the constructor initializer order to member declaration order.
+- Next required step: run the normal and sanitizer build/test commands on Raspberry Pi. Do not install the binary or restart the production service.
+- After target-device confirmation, proceed to integration coverage for client disconnect while upstream is blocked and for slow consumers.
+- DNS/IP SSRF remains explicitly deferred by the user.

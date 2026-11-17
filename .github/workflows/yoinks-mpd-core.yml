@@ -1,0 +1,64 @@
+name: Yoinks-MPD C++ core
+# Keep the lifecycle sanitizer diagnostics in the required CI path.
+
+on:
+  push:
+    paths:
+      - "yoinks-mpd/**"
+      - "scripts/yoinks-mpd/install.sh"
+      - "scripts/yoinks-mpd/yoinks-mpd.service"
+      - "scripts/yoinks-mpd/INSTALL.md"
+      - "scripts/yoinks-mpd/diagnose-mpd-http.sh"
+      - "scripts/yoinks-mpd/live-smoke-test.sh"
+      - "work/youtube-audio-bridge/AUDYT_ARCHITEKTURY_I_PLAN_REALIZACJI.md"
+      - "docs/yoinks-mpd/README.md"
+      - ".github/workflows/yoinks-mpd-core.yml"
+  pull_request:
+    paths:
+      - "yoinks-mpd/**"
+      - "scripts/yoinks-mpd/install.sh"
+      - "scripts/yoinks-mpd/yoinks-mpd.service"
+      - "scripts/yoinks-mpd/INSTALL.md"
+      - "scripts/yoinks-mpd/diagnose-mpd-http.sh"
+      - "scripts/yoinks-mpd/live-smoke-test.sh"
+      - "work/youtube-audio-bridge/AUDYT_ARCHITEKTURY_I_PLAN_REALIZACJI.md"
+      - "docs/yoinks-mpd/README.md"
+      - ".github/workflows/yoinks-mpd-core.yml"
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ libboost-dev nlohmann-json3-dev libcurl4-openssl-dev openssl mpd mpc
+      - name: Verify installer shell syntax
+        run: |
+          bash -n scripts/yoinks-mpd/install.sh
+          bash -n scripts/yoinks-mpd/diagnose-mpd-http.sh
+          bash -n scripts/yoinks-mpd/live-smoke-test.sh
+          bash -n yoinks-mpd/tests/http_api_test.sh
+          bash -n yoinks-mpd/tests/http_stream_test.sh
+          bash -n yoinks-mpd/tests/http_mpd_daemon_test.sh
+          bash scripts/yoinks-mpd/install.sh --help
+          sed -e 's#^ExecStart=.*#ExecStart=/bin/true#' -e 's#^EnvironmentFile=.*#EnvironmentFile=/dev/null#' scripts/yoinks-mpd/yoinks-mpd.service > /tmp/yoinks-mpd.service
+          systemd-analyze verify /tmp/yoinks-mpd.service
+      - name: Configure
+        run: cmake -S yoinks-mpd -B yoinks-mpd/build -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build yoinks-mpd/build --parallel 2
+      - name: Test
+        run: ctest --test-dir yoinks-mpd/build --timeout 120 --output-on-failure
+      - name: Configure sanitizer build
+        run: |
+          cmake -S yoinks-mpd -B yoinks-mpd/build-sanitizers \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DYOINKS_MPD_ENABLE_SANITIZERS=ON
+      - name: Build with AddressSanitizer and UndefinedBehaviorSanitizer
+        run: cmake --build yoinks-mpd/build-sanitizers --parallel 2
+      - name: Test with AddressSanitizer and UndefinedBehaviorSanitizer
+        run: ctest --test-dir yoinks-mpd/build-sanitizers --timeout 120 --output-on-failure

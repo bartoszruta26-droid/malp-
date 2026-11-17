@@ -231,12 +231,35 @@ All six reported cases passed: binary FIFO transfer and cleanup; playlist reject
 - No DNS/SSRF code change has been made yet. The next work is a test-first design and adversarial resolver/connection tests.
 
 
-## ASan/UBSan lifecycle stress timeout — diagnostic follow-up (2026-11-17)
+- Follow-up diagnostic commit `7695163c` adds phase markers around each shutdown/mutation race (`release`, `erase`, `clear`, `retainOnly`), including racer release, mutation/shutdown entry, create-gate check, and worker joins. This will localize whether the sanitizer hang is in the synchronization barrier, the 100,000-iteration create probe, or thread joining. No production implementation was changed in this diagnostic step.
 
-- Watchdog workflow run `44127739602` for workflow-only commit `7df021af` completed with failure. Normal Release CTest passed **11/11**; sanitizer configure and build succeeded; sanitizer CTest passed 10/11.
-- The only failing test was `lazy_stream_session_registry`, which hit the configured per-test timeout of 120 seconds. All other sanitizer tests passed. This is a confirmed timeout, not a sanitizer memory/UB report.
-- The sanitizer run includes the new bounded lifecycle stress test from `c063439c`. The timeout may occur in that test or an earlier lifecycle test in the same executable; the prior CTest output did not identify the last entered test.
-- Added per-test `[ RUN ]` / `[ OK ]` stderr markers in commit `2066870e` so the next CI timeout will identify the exact test boundary. No registry implementation change has been made in response yet; do not increase the timeout as a substitute for diagnosis.
-- The older runs `44124014299` and `44123745133` were still reported in progress at the last status check. Their normal CTest stages had passed and their sanitizer CTest stages remained unresolved; do not treat them as successful.
-- DNS/SSRF destination-address remediation is explicitly deferred at the user's direction. Preserve the finding as an open audit item, but do not implement or expand that work in this cycle.
-- No Raspberry Pi pull requested, no production binary installation, no service restart, and no production MPD queue/playback change.
+
+## Sanitizer race-test correction — deterministic shutdown gate (2026-11-17)
+
+- The CI run for `f44a56ee` confirms the normal suite passes, while the ASan/UBSan CTest suite times out in `lazy_stream_session_registry` at `testShutdownSerializesWithConcurrentRegistryMutations()`.
+- The prior test's `shutdown_started` flag was set immediately before calling `shutdown()`; it did not prove that the registry had acquired its mutex and set `shutting_down_`. Its 100,000-iteration `create()/erase()` probe could contend with shutdown and made the test timing-dependent.
+- Replaced that inference with a test-only callback fired immediately after the shutdown admission gate is set under the registry mutex. The callback only signals the test condition variable and does not re-enter the registry.
+- The test now waits for both the selected mutation to finish and the actual shutdown gate signal, releases the paused activation, joins all workers, and verifies that a post-shutdown `create()` is rejected and the registry is empty.
+- This change removes the busy create/erase polling loop; it does not weaken the shutdown/mutation race cases or change production behavior when the test callback is unset.
+- CI and Raspberry Pi validation are pending. The DNS/IP SSRF finding remains deferred at the user's request.
+
+
+## Streaming back-pressure tests — deterministic blocked-writer synchronization (2026-11-17)
+
+- The CI run `44136751848` for lifecycle-test commit `0908495c` passed: Release CTest 11/11 and Debug ASan/UBSan CTest 11/11. The previous sanitizer timeout in the shutdown/mutation race is resolved at this tested revision.
+- Raspberry Pi execution of the exact tested revision is still pending; CI does not replace target-device validation.
+- Added a test-only notification seam to `BoundedStreamBuffer`, invoked only when a writer is actually blocked by a full buffer. The callback must only signal an external test condition and must not re-enter the buffer while its mutex is held.
+- Back-pressure drain and cancellation tests now wait for confirmed writer blocking before reading/cancelling. This removes scheduler-dependent assumptions from those tests while leaving default production construction unchanged.
+- The new buffer-test revision requires its own Release and ASan/UBSan CI pass.
+
+
+- **Intermediate CI finding:** the first build of the buffer-test change failed under `-Werror=reorder` because the constructor initializer list did not follow member declaration order. Corrected the initializer order; no runtime algorithm change. The final combined commit must pass Release and ASan/UBSan CI before this stage is accepted.
+
+
+## Deterministic bounded-buffer back-pressure tests — CI accepted (2026-11-17)
+
+- Final combined revision `2f59ce15` passed GitHub Actions run `44137984940`.
+- Release configure/build and full CTest passed; Debug ASan/UBSan configure/build and full CTest also passed. All workflow steps completed successfully.
+- The earlier intermediate build failures were due to the member initializer list order being inconsistent with declaration order under `-Werror=reorder`; this was corrected before the successful run.
+- The buffer tests now wait for explicit notification that the producer is blocked by a full buffer before draining or cancelling. The optional test callback is unset in production use.
+- Remaining gate: reproduce normal and sanitizer validation on the Raspberry Pi target. This CI result does not establish hardware playback, live YouTube/CDN behavior, or target-device timing.

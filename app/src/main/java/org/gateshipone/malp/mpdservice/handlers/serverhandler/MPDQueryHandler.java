@@ -1064,6 +1064,23 @@ public class MPDQueryHandler extends MPDGenericHandler {
                 MPDHandlerAction.NET_HANDLER_EXTRA_STRING.EXTRA_SONG_URL, url);
     }
 
+    /** Adds a URI to the tail of the current MPD queue without changing playback. */
+    public static void addSong(String url) {
+        genericStringAction(MPDHandlerAction.NET_HANDLER_ACTION.ACTION_ADD_PATH,
+                MPDHandlerAction.NET_HANDLER_EXTRA_STRING.EXTRA_SONG_URL, url);
+    }
+
+    /** Clears the current MPD queue. */
+    public static void clearCurrentPlaylist() {
+        genericEmptyAction(MPDHandlerAction.NET_HANDLER_ACTION.ACTION_CLEAR_CURRENT_PLAYLIST);
+    }
+
+    /** Starts playback at the supplied queue index. */
+    public static void playSongIndex(int index) {
+        genericIntAction(MPDHandlerAction.NET_HANDLER_ACTION.ACTION_COMMAND_JUMP_INDEX,
+                MPDHandlerAction.NET_HANDLER_EXTRA_INT.EXTRA_SONG_INDEX, index);
+    }
+
     public static void clearPlaylist() {
         genericEmptyAction(MPDHandlerAction.NET_HANDLER_ACTION.ACTION_CLEAR_CURRENT_PLAYLIST);
     }

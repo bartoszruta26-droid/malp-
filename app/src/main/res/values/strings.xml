@@ -493,4 +493,21 @@
     <!-- permission request -->
     <string name="permission_request_snackbar_button" translatable="false">@android:string/ok</string>
     <string name="permission_request_notifications_snackbar_explanation">Show Notifications Permission is required for Bulkdownloader.</string>
+    <string name="pref_youtube_bridge_url_key" translatable="false">youtube_bridge_url</string>
+    <string name="pref_youtube_bridge_token_key" translatable="false">youtube_bridge_token</string>
+    <string name="preference_youtube_bridge_title">YouTube Audio Bridge</string>
+    <string name="preference_youtube_bridge_url_title">Adres Raspberry Pi Bridge</string>
+    <string name="preference_youtube_bridge_url_summary">Adres HTTPS usługi Raspberry Pi, np. https://radio.example.org</string>
+    <string name="preference_youtube_bridge_token_title">Token dostępu Bridge</string>
+    <string name="preference_youtube_bridge_token_summary">Token Bearer otrzymany z konfiguracji usługi Raspberry Pi</string>
+    <string name="youtube_bridge_not_configured">Skonfiguruj adres i token YouTube Audio Bridge w ustawieniach.</string>
+    <string name="youtube_share_multiple_links_unsupported">Udostępnij jeden link YouTube naraz.</string>
+    <string name="youtube_share_dialog_title">YouTube do MPD</string>
+    <string name="youtube_share_dialog_message">Wybierz sposób dodania materiału do odtwarzacza Raspberry Pi.</string>
+    <string name="youtube_share_enqueue">Dodaj do kolejki</string>
+    <string name="youtube_share_play_now">Odtwarzaj teraz</string>
+    <string name="youtube_bridge_resolving">Rozpoznawanie materiału YouTube…</string>
+    <string name="youtube_bridge_empty_result">Bridge nie zwrócił pozycji do odtworzenia.</string>
+    <string name="youtube_bridge_error">Błąd YouTube Bridge: %1$s</string>
+    <string name="youtube_bridge_queued">Dodano pozycji do kolejki MPD: %1$d</string>
 </resources>
