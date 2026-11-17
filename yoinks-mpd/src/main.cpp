@@ -62,6 +62,12 @@ int main() {
         queue_config.enqueue = [mpd](const std::vector<std::string>& uris, bool play_now) {
             return mpd->enqueue(uris, play_now);
         };
+        queue_config.queued_session_ids = [mpd](std::vector<std::string>& ids) {
+            const auto snapshot = mpd->listStreamSessionIds();
+            if (!snapshot.success) return false;
+            ids = snapshot.stream_session_ids;
+            return true;
+        };
         config.queue_service = std::make_shared<yoinks::YoutubeQueueService>(std::move(queue_config));
 
         yoinks::HttpServer server{std::move(config)};
