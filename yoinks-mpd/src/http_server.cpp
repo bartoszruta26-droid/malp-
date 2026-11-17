@@ -17,6 +17,8 @@
 #include <array>
 #include <sstream>
 #include <chrono>
+#include <csignal>
+#include <functional>
 #include <cctype>
 #include <memory>
 #include <stdexcept>
@@ -358,29 +360,62 @@ void HttpServer::run() {
                 "HTTP control API is loopback-only until TLS termination is implemented");
     }
     tcp::acceptor acceptor{context, tcp::endpoint{address, config_.port}};
-    for (;;) {
-        tcp::socket socket{context};
-        acceptor.accept(socket);
-        const std::size_t previous = active_connections->fetch_add(1);
-        if (previous >= kMaximumActiveConnections) {
-            active_connections->fetch_sub(1);
-            rejectBusy(std::move(socket));
-            continue;
-        }
-        asio::post(workers, [socket = std::move(socket),
-                             token = config_.bearer_token,
-                             active_connections, active_streams, sessions,
-                             &stream_workers]() mutable {
-            bool handed_off = false;
-            try {
-                handed_off = serveConnection(std::move(socket), token, sessions,
-                    active_streams, stream_workers, active_connections);
-            } catch (...) {
-                // A malformed client must not terminate a worker or expose details.
-            }
-            if (!handed_off) active_connections->fetch_sub(1);
-        });
-    }
+    asio::signal_set signals{context, SIGINT, SIGTERM};
+    signals.async_wait([&](const beast::error_code&, int) {
+        beast::error_code ignored;
+        acceptor.close(ignored);
+    });
+
+    auto accept_next = std::make_shared<std::function<void()>>();
+    *accept_next = [&]() {
+        if (!acceptor.is_open()) return;
+        auto socket = std::make_shared<tcp::socket>(context);
+        acceptor.async_accept(*socket,
+            [&, socket, accept_next](const beast::error_code& accept_error) mutable {
+                if (accept_error) {
+                    if (accept_error != asio::error::operation_aborted) {
+                        beast::error_code ignored;
+                        acceptor.close(ignored);
+                    }
+                    return;
+                }
+
+                const std::size_t previous = active_connections->fetch_add(1);
+                if (previous >= kMaximumActiveConnections) {
+                    active_connections->fetch_sub(1);
+                    rejectBusy(std::move(*socket));
+                } else {
+                    try {
+                        asio::post(workers, [socket = std::move(*socket),
+                                             token = config_.bearer_token,
+                                             active_connections, active_streams, sessions,
+                                             &stream_workers]() mutable {
+                            bool handed_off = false;
+                            try {
+                                handed_off = serveConnection(std::move(socket), token,
+                                    sessions, active_streams, stream_workers,
+                                    active_connections);
+                            } catch (...) {
+                                // A malformed client must not terminate a worker or expose details.
+                            }
+                            if (!handed_off) active_connections->fetch_sub(1);
+                        });
+                    } catch (...) {
+                        active_connections->fetch_sub(1);
+                    }
+                }
+                (*accept_next)();
+            });
+    };
+
+    (*accept_next)();
+    context.run();
+
+    // Drain control requests first so no new stream jobs can be submitted.
+    workers.join();
+    // Cancel upstream producers and wake readers before joining stream workers.
+    sessions->clear();
+    stream_workers.join();
 }
 
 }  // namespace yoinks
