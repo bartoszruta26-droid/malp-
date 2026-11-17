@@ -867,6 +867,8 @@ Anulowanie: każda sesja ma współdzielony `atomic_bool`, przekazywany callback
 
 Testy `lazy_stream_session_registry` obejmują brak eager resolution, odrzucenie błędnego video ID, odrzucenie nieautoryzowanego hosta, single-flight, anulowanie resolvera podczas `erase()` oraz walidację limitów RAM/sesji.
 
-Commit testów `c49b9a8c9b00ca8647cd867f2e3c7926422ead38` uruchomił GitHub Actions run `44052224469`. Ostatni odczyt: `build-and-test` nadal `in_progress`, konfiguracja CMake zakończona sukcesem, kompilacja w toku. Nie oznaczać etapu jako zaliczonego, dopóki CI nie zakończy kompilacji i CTest.
+Commit testów `c49b9a8c9b00ca8647cd867f2e3c7926422ead38` uzyskał `build-and-test: success` w GitHub Actions (run `44052224469`, job `133932611133`, zakończony 2026-11-17 09:05:46 UTC). Build zakończony powodzeniem, CTest: **8/8 PASS**: `bounded_stream_buffer`, `http_upstream_validation`, `stream_session_registry`, `chunked_stream_writer`, `yt_dlp_resolver`, `mpd_queue_manager`, `lazy_stream_session_registry`, `http_api_integration`.
+
+Wcześniejsze commity pośrednie `8d06a40...` i `4096c82...` nie przeszły CI, ponieważ kolejne pliki interfejsu i implementacji były zatwierdzane osobno, zanim aktualizacja testów zakończyła migrację sygnatur callbacku. Następny kompletny commit `c49b9a8...` zawierał spójny interfejs, implementację i testy oraz przeszedł cały build i CTest.
 
 Komponent pozostaje izolowany: `HttpServer` i `POST /api/v1/queue` nie są jeszcze podłączone do leniwego rejestru. Stary aktywny `StreamSessionRegistry` nadal obsługuje istniejący testowy endpoint. Nie wykonano testu na Raspberry Pi ani nie zmieniano kolejki MPD.
