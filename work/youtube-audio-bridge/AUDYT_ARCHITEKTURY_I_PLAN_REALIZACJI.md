@@ -643,3 +643,10 @@ Dodano katalog `yoinks-mpd/`:
 5. Zaimplementować HTTP relay z back-pressure, refresh URL, cancellation i testami mock upstream.
 6. Dodać MPD protocol queue manager i testy semantyki enqueue/play_now.
 7. Uzyskać raport MPD CURL z docelowego Raspberry Pi.
+
+
+## Aktualizacja — bootstrap serwera HTTP C++ (2026-11-17)
+
+Dodano Boost.Beast HTTP server, executable `yoinks-mpd`, konfigurację środowiskową `YOINKS_MPD_BIND`, `YOINKS_MPD_PORT`, `YOINKS_MPD_TOKEN`, kontrolę tokenu Bearer (porównanie stałoczasowe), limit body 16 KiB, limit nagłówków 8 KiB i timeouty odczytu/zapisu. Domyślny bind to 127.0.0.1. `GET /api/v1/health` odpowiada statusem usługi. `POST /api/v1/queue` waliduje JSON i mode, ale celowo zwraca 503 backend_not_ready, dopóki nie powstaną resolver, HTTP relay i MPD queue manager.
+
+Dodano test integracyjny uruchamiający proces i sprawdzający health, 401, 400, fail-closed 503 oraz 413. Test jest zarejestrowany w CTest. CI instaluje Boost i nlohmann-json przed budowaniem. **Nie ma jeszcze potwierdzonego przebiegu CI** dla najnowszego commita; nie deklarować kompilacji serwera jako zaliczonej. Serwer jest synchroniczny i obsługuje połączenia pojedynczo, bez TLS — nie jest gotowy do wystawienia w LAN/produkcji.
