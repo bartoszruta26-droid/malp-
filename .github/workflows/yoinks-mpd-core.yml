@@ -51,3 +51,12 @@ jobs:
         run: cmake --build yoinks-mpd/build --parallel 2
       - name: Test
         run: ctest --test-dir yoinks-mpd/build --output-on-failure
+      - name: Configure sanitizer build
+        run: |
+          cmake -S yoinks-mpd -B yoinks-mpd/build-sanitizers \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DYOINKS_MPD_ENABLE_SANITIZERS=ON
+      - name: Build with AddressSanitizer and UndefinedBehaviorSanitizer
+        run: cmake --build yoinks-mpd/build-sanitizers --parallel 2
+      - name: Test with AddressSanitizer and UndefinedBehaviorSanitizer
+        run: ctest --test-dir yoinks-mpd/build-sanitizers --output-on-failure
