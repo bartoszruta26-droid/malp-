@@ -35,8 +35,8 @@ enum class UpstreamState {
 /**
  * Pulls one HTTPS media response into a fixed-size RAM buffer.
  *
- * libcurl performs TLS peer/host verification, follows HTTPS redirects only,
- * and streams callback chunks directly into BoundedStreamBuffer. No media
+ * libcurl performs TLS peer/host verification and streams callback chunks
+ * directly into BoundedStreamBuffer. Redirects are disabled. No media
  * file, temporary file, FIFO, disk cache or unbounded response body is used.
  * The URL must come from the trusted resolver, never directly from Android.
  */
