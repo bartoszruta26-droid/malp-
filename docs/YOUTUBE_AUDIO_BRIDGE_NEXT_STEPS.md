@@ -338,3 +338,12 @@ Nie publikować APK jako „gotowego do instalacji” na podstawie samego CI. Wy
 - A subsequent hardening change in commit `177643772e25d5dd0af8708bff54df8db1d645e9` makes the real-daemon test fail early unless the installed MPD build advertises its CURL input plugin. CI run `44091039138` is validating that exact latest branch head; its result is pending at the time of this audit update.
 - This is a real MPD daemon playback test, but still uses deterministic local HTTPS/WAV fixtures and a fake yt-dlp executable. Live YouTube resolution/CDN retrieval, target Raspberry Pi MPD build compatibility, real audio output hardware and audible playback remain unverified.
 - No production MPD configuration, service, playlist, queue, or Android APK was modified or deployed.
+
+
+### Follow-up: MPD CURL capability guard and manual live smoke script — 2026-11-17
+
+- The real-daemon test had already passed 11/11 in run `44090982855`, but the additional capability guard in run `44091039138` failed because `grep -q` closed the `mpd --version` pipe early under Bash `pipefail`. The MPD output itself listed `curl` among the supported URI/input features; this was a shell-check false negative, not a missing MPD plugin.
+- Corrected the check by capturing the complete `mpd --version` output before searching it. Applied the same correction to the opt-in live smoke script.
+- Added `scripts/yoinks-mpd/live-smoke-test.sh`: an explicit, non-root manual test that starts an isolated MPD instance on a free loopback port with a null output, starts a separate bridge process against that MPD, submits one supplied YouTube URL using the installed yt-dlp, and checks MPD playback plus the local proxy URI. Temporary MPD state/logs are removed at exit; no production MPD queue is accessed and no media file/cache is downloaded.
+- Documented the manual command in `scripts/yoinks-mpd/INSTALL.md`. The live script is syntax-checked in CI but is not run automatically because it requires external YouTube access and a user-supplied URL.
+- Latest commits for the guard correction and live test are pending CI verification; do not mark the latest branch head green until that workflow finishes.
