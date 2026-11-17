@@ -489,3 +489,11 @@ No production binary installation or service restart without explicit user appro
 
 
 - Latest diagnostic follow-up `7695163c` adds per-phase stderr markers to the shutdown-versus-mutation test. Inspect the next sanitizer log to identify the exact case and phase before changing registry synchronization. Do not infer the root cause from the test name alone.
+
+
+## Następny etap — deterministyczna bramka shutdown (2026-11-17)
+
+- Zdiagnozowano, że wcześniejszy test sygnalizował `shutdown_started` przed wejściem do `shutdown()`; nie potwierdzało to ustawienia `shutting_down_`. Dodatkowo pętla 100 000 prób `create()/erase()` wprowadzała niepotrzebną konkurencję o mutex.
+- Test otrzymuje teraz sygnał z testowego punktu kontrolnego wywoływanego po ustawieniu bramki shutdown pod mutexem rejestru. Po zakończeniu mutacji i potwierdzeniu bramki zwalnia aktywację, łączy wątki i sprawdza odrzucenie nowej sesji.
+- Wymagane: CI Release + ASan/UBSan oraz uruchomienie na Raspberry Pi. Do tego czasu sanitizer gate pozostaje otwarty.
+- DNS/SSRF pozostaje odłożone na wyraźne polecenie użytkownika.
