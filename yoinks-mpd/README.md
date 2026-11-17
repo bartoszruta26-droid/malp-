@@ -1,3 +1,5 @@
+> **Status update 2026-11-17:** The integrated C++ bridge, resolver, lazy sessions, MPD queue adapter and Android client are present in this branch. The historical implementation-status notes below predate that integration and must not be read as the current state. See [the current architecture audit](../work/youtube-audio-bridge/AUDYT_ARCHITEKTURY_I_PLAN_REALIZACJI.md) and [installation guide](../scripts/yoinks-mpd/INSTALL.md). The installer builds and tests the service, installs yt-dlp with SHA-256 verification, creates a restricted systemd service and generates a protected API token. Target-device MPD/CURL compatibility and end-to-end playback remain unverified.
+
 # Yoinks-MPD C++ service core
 
 This directory is the initial C++17 core for the Raspberry Pi HTTP bridge.
