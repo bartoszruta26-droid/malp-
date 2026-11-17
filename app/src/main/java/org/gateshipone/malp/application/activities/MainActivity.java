@@ -296,19 +296,18 @@ public class MainActivity extends GenericActivity
             urls = YouTubeShareParser.extractYouTubeUrls(
                     intent.getStringExtra(Intent.EXTRA_TEXT));
         } else if (Intent.ACTION_SEND_MULTIPLE.equals(action)) {
-            ArrayList<CharSequence> sharedTexts =
-                    intent.getCharSequenceArrayListExtra(Intent.EXTRA_TEXT);
-            if (sharedTexts == null || sharedTexts.isEmpty()) return;
-            List<String> extracted = new ArrayList<>();
-            for (CharSequence sharedText : sharedTexts) {
-                for (String url : YouTubeShareParser.extractYouTubeUrls(
-                        sharedText == null ? null : sharedText.toString())) {
-                    if (!extracted.contains(url)) extracted.add(url);
-                    if (extracted.size() > 1) break;
-                }
-                if (extracted.size() > 1) break;
+            Bundle extras = intent.getExtras();
+            if (extras == null) return;
+            // Android shares may provide EXTRA_TEXT as a CharSequence or as a
+            // list of text payloads depending on the sending application.
+            Object sharedPayload = extras.get(Intent.EXTRA_TEXT);
+            if (sharedPayload instanceof CharSequence) {
+                urls = YouTubeShareParser.extractYouTubeUrls(sharedPayload.toString());
+            } else if (sharedPayload instanceof Iterable<?>) {
+                urls = YouTubeShareParser.extractYouTubeUrls((Iterable<?>) sharedPayload);
+            } else {
+                return;
             }
-            urls = extracted;
         } else {
             return;
         }
