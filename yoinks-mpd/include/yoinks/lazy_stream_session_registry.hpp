@@ -26,6 +26,8 @@ struct LazyStreamSessionRegistryConfig {
     HttpUpstreamConfig upstream{};
     // Deterministic lifecycle-race seam; unset in production.
     std::function<void()> after_upstream_start_for_tests;
+    // Signals that shutdown has set its admission gate while holding the registry mutex.
+    std::function<void()> after_shutdown_flag_set_for_tests;
 };
 
 /**
