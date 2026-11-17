@@ -14,6 +14,7 @@ add_library(yoinks_mpd_core
     src/bounded_stream_buffer.cpp
     src/http_server.cpp
     src/http_upstream_stream.cpp
+    src/lazy_stream_session_registry.cpp
     src/mpd_queue_manager.cpp
     src/stream_session_registry.cpp
     src/yt_dlp_resolver.cpp
