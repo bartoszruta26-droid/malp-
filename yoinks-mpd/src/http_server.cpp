@@ -90,7 +90,8 @@ http::response<http::string_body> response(
 http::status queueFailureStatus(const std::string& error_code) {
     if (error_code == "mpd_connect_failed"
             || error_code == "mpd_protocol_greeting_invalid"
-            || error_code == "session_capacity_reached") {
+            || error_code == "session_capacity_reached"
+            || error_code == "mpd_reconcile_failed") {
         return http::status::service_unavailable;
     }
     if (error_code == "process_timeout") return http::status::gateway_timeout;
