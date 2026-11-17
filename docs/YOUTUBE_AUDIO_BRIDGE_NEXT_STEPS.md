@@ -193,3 +193,30 @@ The local HTTP proxy is a streaming relay, not a download manager. It must strea
 - First Android CI runs for the change failed at `compileDebugJavaWithJavac`: `MainActivity` used `ArrayList` without importing it.
 - Added `java.util.ArrayList` to `MainActivity.java` in commit `db00d37f5257711073e44f88c7e4a661d287bba1`.
 - A fresh Android CI run `44074664171` is validating that corrected source. Do not mark the Android change verified until this run reaches a terminal result with successful APK assembly/artifact upload.
+
+
+## Audyt kontynuacji — 17.11.2026 (stan po zmianach)
+
+### Stan commitów i kontroli
+- Gałąź robocza: `feature/youtube-audio-bridge`; nie scalano jej z `master` ze względu na rozbieżność historii (333 commitów po stronie feature i 7 po stronie master w chwili porównania).
+- Test C++/HTTP po rozdzieleniu gotowości: run `44074047254` zakończony sukcesem; wszystkie 9 testów CTest przeszło.
+- W aktualizacji Android ACTION_SEND_MULTIPLE pierwsze przebiegi (`44074441626`, `44074465965`, `44074498551`) wykazały brak importu `java.util.ArrayList` w `MainActivity`. Poprawiono to w commicie `db00d37f5257711073e44f88c7e4a661d287bba1`.
+- Run Android `44074664171` buduje commit `db00d37f5257711073e44f88c7e4a661d287bba1`; w momencie zapisu tej aktualizacji job był nadal aktywny w kroku `Assemble debug APK`. Nie oznaczać tego przebiegu jako sukcesu, dopóki API GitHub nie poda końcowego `success` oraz kroku `Upload debug APK` zakończonego powodzeniem.
+- Instrukcja Raspberry Pi została zaktualizowana tak, aby odpowiadała obecnemu instalatorowi (C++ service + yt-dlp + systemd), bez deklarowania nieprzeprowadzonych testów sprzętowych.
+
+### Zmiany funkcjonalne Androida
+- Dodano filtr manifestu `ACTION_SEND_MULTIPLE` dla `text/plain`.
+- `MainActivity` odczytuje listę udostępnionych tekstów, wydobywa dozwolone HTTPS URL YouTube, usuwa duplikaty i przyjmuje dokładnie jeden unikalny link. Dwa różne linki nadal kończą się czytelnym komunikatem; brak niejawnego dodawania wielu utworów.
+- Dodano testy parsera: kolejność, deduplikacja, ignorowanie złych URL-i, puste/null dane, userinfo i porty spoza domyślnego.
+
+### Wciąż otwarte bramki
+1. Zakończyć i sprawdzić build Androida po imporcie `ArrayList`; przejrzeć APK i artefakt z tego samego SHA.
+2. Dodać testy emulatorowe/intentowe `ACTION_SEND` i `ACTION_SEND_MULTIPLE` (sama kompilacja nie dowodzi poprawnego zachowania Android share sheet).
+3. Zweryfikować dokładnie strukturę URL Bridge w ustawieniach oraz kliencie (HTTPS, host, port domyślny/niestandardowy, userinfo, query, fragment, ścieżka reverse proxy), zachowując zgodność z rzeczywistymi wdrożeniami.
+4. Audyt `usesCleartextTraffic=true`: nie usuwać globalnej zgody bez prześledzenia legacy MPD/artwork HTTP. Dążyć do jawnych wyjątków domenowych i HTTPS dla nowego API, gdy zgodność starego klienta będzie potwierdzona.
+5. Wdrożenie Nginx/TLS i testy na Raspberry Pi są niezweryfikowane. C++ CI nie potwierdza kompatybilności MPD/CURL, HEAD/Range/seek, reconnect ani odtwarzania.
+6. Potrzebny mock MPD testujący ścieżkę sukcesu HTTP → resolve → enqueue, obecne testy HTTP pokrywają fail-closed na niedostępnym MPD.
+7. Do czasu testu na izolowanej instancji MPD nie zmieniać produkcyjnej kolejki, mpd.conf ani aktywnego strumienia.
+
+### Zasada odbioru
+Nie publikować APK jako „gotowego do instalacji” na podstawie samego CI. Wymagane: końcowy green build dla aktualnego SHA, artefakt APK z tego SHA, test instalacji/uruchomienia na emulatorze oraz test funkcji mostu na docelowym środowisku. Sekrety tokenu Bearer nie mogą trafiać do logów ani do publicznych artefaktów.
