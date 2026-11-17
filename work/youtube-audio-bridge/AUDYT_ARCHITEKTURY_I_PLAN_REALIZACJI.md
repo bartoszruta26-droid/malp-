@@ -1162,3 +1162,13 @@ Dodano testy protokołu dla zdarzenia playlisty, zdarzenia niezwiązanego z play
 - Testy korzystają wyłącznie z lokalnych atrap/gniazda testowego; nie łączą się z Raspberry Pi ani z zewnętrznym MPD.
 - CI musi potwierdzić kompilację i zachowanie tych przypadków przed dalszą integracją watchera.
 - Integracja watchera z `main.cpp` oraz automatyczna konwersja YouTube pozostają nieaktywne.
+
+
+## Korekta testu limitu odpowiedzi snapshotu — 2026-11-17
+
+- Przebieg CI `44150764418` zakończył się niepowodzeniem wyłącznie na teście `mpd_queue_manager`; kompilacja wszystkich celów zakończyła się sukcesem, a pozostałe testy przeszły.
+- Przyczyną był błędny zapis separatorów w fixture `testSnapshotResponseLineLimitIsEnforced()`: test generował literalne znaki backslash+n zamiast rzeczywistych znaków końca linii. Serwer testowy wysyłał więc jeden niekończący się wiersz protokołu i pozostawał w oczekiwaniu na kolejne polecenie, przez co `mock.join()` blokował test aż do timeoutu CTest.
+- Poprawiono literały na standardowe sekwencje C++ `\\n`, tak aby odpowiedź zawierała 8320 osobnych linii i końcowy separator command-list. Nie zmieniano limitów produkcyjnego parsera ani zachowania MPD.
+- Poprawka testu: commit `edc32ae56de8efe4769188d3d994f232d729e733`. Treść pliku ponownie pobrano z GitHub i sprawdzono.
+- Wynik nowego CI dla poprawki wymaga potwierdzenia; do czasu zakończenia nie uznawać testów za zaliczone.
+- Integracja watchera, automatyczna konwersja URL YouTube i wdrożenie na Raspberry Pi pozostają nieaktywne.
