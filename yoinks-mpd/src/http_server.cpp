@@ -5,6 +5,8 @@
 #include "yoinks/http_server.hpp"
 
 #include <boost/asio.hpp>
+#include <boost/asio/post.hpp>
+#include <boost/asio/thread_pool.hpp>
 #include <boost/beast.hpp>
 #include <nlohmann/json.hpp>
 
