@@ -56,3 +56,8 @@ The component is not yet connected to a local HTTP response endpoint. It is a bo
 ## HTTP server concurrency and exposure policy
 
 The control server now uses a fixed four-thread worker pool and caps accepted/queued connections at 16; excess connections receive 503. The listener rejects every non-loopback bind address until a separately reviewed TLS termination design exists. This removes the earlier one-connection-at-a-time limitation, but long-lived stream responses will still require reserved capacity or a separate bounded streaming executor.
+
+
+## Bounded stream-session registry
+
+Added `StreamSessionRegistry` with a default maximum of four sessions (hard cap 32). Each session owns one `HttpUpstreamStream` and therefore one fixed-size RAM buffer; aggregate buffer allocation is bounded by the session cap. Session IDs are 128-bit values obtained from the Linux kernel `getrandom(2)` interface and encoded as 32 lowercase hexadecimal characters. The registry does not expose source URLs and supports lookup, cancellation/removal and bulk shutdown. It is not yet wired to an MPD-facing HTTP route or the queue API; no playable URI is issued at this stage.
