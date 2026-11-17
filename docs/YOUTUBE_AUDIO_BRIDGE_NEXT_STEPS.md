@@ -468,3 +468,12 @@ No production binary installation or service restart without explicit user appro
 - Stress-test assertion was hardened in follow-up commit `c063439c`: the counter now records each attempted `activate()` call before the operation, so the test does not depend on a resolver winning a thread-scheduling race. CI for the corrected head remains pending.
 
 - Sanitizer CI baseline passed: run `44123520539` for commit `fd9a330f` completed successfully, including the full Debug ASan/UBSan CTest suite. The new bounded stress test and its deterministic counter correction are on later commits and remain subject to their own CI run.
+
+
+## Immediate follow-up — CI test timeout and stress validation (2026-11-17)
+
+1. Verify the watchdog workflow revision: both normal and ASan/UBSan CTest runs must finish within the 120-second per-test limit, and the overall job must finish within 30 minutes.
+2. Inspect any timeout failure's exact test name and logs; fix the test or implementation rather than increasing limits without evidence.
+3. Once the corrected stress test and sanitizer suite pass CI, pull the exact branch head to Raspberry Pi and run normal plus separate sanitizer builds in `/tmp/yoinks-mpd-audit` and `/tmp/yoinks-mpd-sanitizers` respectively.
+4. Continue with deterministic streaming tests for slow consumers, disconnect during blocked upstream writes, timeout/error propagation, byte-limit enforcement, and orderly shutdown.
+5. Complete DNS/SSRF analysis before changing address resolution or connection pinning. Keep live YouTube, target MPD, audible output, and RAM-only storage checks as independent acceptance gates.
