@@ -87,7 +87,8 @@ large_status="$(curl --silent -o /dev/null -w '%{http_code}' \
 kill -TERM "$server_pid"
 shutdown_complete=0
 for _ in $(seq 1 50); do
-    if ! kill -0 "$server_pid" 2>/dev/null; then
+    process_state="$(ps -o stat= -p "$server_pid" 2>/dev/null || true)"
+    if [[ -z "$process_state" || "$process_state" == Z* ]]; then
         shutdown_complete=1
         break
     fi
