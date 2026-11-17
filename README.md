@@ -35,17 +35,19 @@ This whole project is licensed under the  **GPLv3 or later** license (see LICENS
  - Partitions (create, delete, move outputs)
  - Tag browser (filter Artists, Albums, Tracks) by all available MPD tags (e.g. genre, performer, composer, label, ...)
 
-## YouTube / yt-dlp / Yoinks-MPD integration (experimental design)
+## YouTube / yt-dlp / Yoinks-MPD integration (experimental)
 
-This fork contains an experimental design area for receiving YouTube shares in MALP and forwarding audio to an existing MPD server on a Raspberry Pi. The intended media path uses **yt-dlp stdout and a Linux FIFO (named pipe)**; it must not create a complete audio file or a temporary media download.
+This fork contains an experimental design area for receiving YouTube shares in MALP and forwarding audio to an existing MPD server on a Raspberry Pi. The **target architecture is a local C++ HTTP streaming relay consumed by MPD's CURL input plugin**. Audio is relayed progressively with bounded RAM buffering and back-pressure; complete media files must never be written to persistent storage.
 
-- Design, limitations and implementation plan: [docs/yoinks-mpd/README.md](docs/yoinks-mpd/README.md)
-- Bash producer prototype: [scripts/yoinks-mpd/yt-dlp-to-fifo.sh](scripts/yoinks-mpd/yt-dlp-to-fifo.sh)
-- Existing YouTube integration audit: [docs/YOUTUBE_AUDIO_BRIDGE_AUDIT.md](docs/YOUTUBE_AUDIO_BRIDGE_AUDIT.md)
+- Architecture, security and implementation plan: [professional audit](work/youtube-audio-bridge/AUDYT_ARCHITEKTURY_I_PLAN_REALIZACJI.md)
+- Current stage tracker: [YouTube audio bridge workspace](work/youtube-audio-bridge/README.md)
+- Pi-side FIFO producer prototype (not the target MPD transport): [yt-dlp-to-fifo.sh](scripts/yoinks-mpd/yt-dlp-to-fifo.sh)
+- Pi HTTP-input diagnostic: [diagnose-mpd-http.sh](scripts/yoinks-mpd/diagnose-mpd-http.sh)
+- Diagnostic procedure: [MPD HTTP input verification](docs/yoinks-mpd/MPD_HTTP_INPUT_DIAGNOSTIC.md)
 
-**Important:** this is an experimental integration, not a verified end-to-end MPD input implementation. MPD's documented `pipe` output plugin writes decoded PCM *from* MPD to a command; it is not an input pipe for feeding YouTube audio into MPD. The FIFO/file-input route must be verified against the exact MPD build and configuration before it is treated as operational. No successful playback or Raspberry Pi test is claimed here.
+**Status:** no end-to-end playback is claimed. The FIFO script only proves the producer side; MPD's documented FIFO/pipe plugins are output plugins and are not a generic audio input. The exact MPD build on the target Raspberry Pi must pass the CURL-input compatibility gate before the relay is implemented. The diagnostic script collects version/build evidence but does not itself prove playback.
 
-The integration scripts and documentation use Bash and native command-line tools (including yt-dlp, MPD/MPС utilities and optionally FFmpeg). **Python is not used.** Yoinks is treated as the user-facing workflow/integration concept; the original interactive Yoinks TUI is not assumed to provide a stream-to-MPD mode.
+The Raspberry Pi implementation is restricted to Bash/C++; Android remains Java. RAM-only is a hard requirement, including disabling disk-backed swap or proving that bridge pages cannot spill to persistent storage. No merge to the default branch before hardware playback, queue, RAM-only and regression gates pass.
 
 ## Description ##
 
