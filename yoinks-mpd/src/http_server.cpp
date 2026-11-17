@@ -257,9 +257,11 @@ void serveStream(beast::tcp_stream& stream, const std::string& id,
     sessions->erase(id);
 }
 
-void serveConnection(tcp::socket socket, const std::string& token,
+bool serveConnection(tcp::socket socket, const std::string& token,
                      const std::shared_ptr<StreamSessionRegistry>& sessions,
-                     const std::shared_ptr<std::atomic<std::size_t>>& active_streams) {
+                     const std::shared_ptr<std::atomic<std::size_t>>& active_streams,
+                     asio::thread_pool& stream_workers,
+                     const std::shared_ptr<std::atomic<std::size_t>>& active_connections) {
     beast::tcp_stream stream{std::move(socket)};
     stream.expires_after(std::chrono::seconds(10));
     beast::error_code error;
@@ -279,7 +281,7 @@ void serveConnection(tcp::socket socket, const std::string& token,
         }
         stream.socket().shutdown(tcp::socket::shutdown_both, error);
         stream.socket().close(error);
-        return;
+        return false;
     }
 
     auto request = parser.release();
@@ -309,18 +311,35 @@ void serveConnection(tcp::socket socket, const std::string& token,
             send_error(http::status::service_unavailable,
                 R"({"success":false,"error":{"code":"stream_capacity_reached","message":"Stream capacity reached"}})");
         } else {
-            try { serveStream(stream, id, sessions); } catch (...) { sessions->erase(id); }
-            active_streams->fetch_sub(1);
+            try {
+                asio::post(stream_workers,
+                    [stream = std::move(stream), id, sessions, active_streams,
+                     active_connections]() mutable {
+                        beast::error_code stream_error;
+                        try { serveStream(stream, id, sessions); }
+                        catch (...) { sessions->erase(id); }
+                        stream.socket().shutdown(tcp::socket::shutdown_both, stream_error);
+                        stream.socket().close(stream_error);
+                        active_streams->fetch_sub(1);
+                        active_connections->fetch_sub(1);
+                    });
+                return true;
+            } catch (...) {
+                active_streams->fetch_sub(1);
+                sessions->erase(id);
+                throw;
+            }
         }
         stream.socket().shutdown(tcp::socket::shutdown_both, error);
         stream.socket().close(error);
-        return;
+        return false;
     }
     auto reply = handle(request, token);
     stream.expires_after(std::chrono::seconds(5));
     http::write(stream, reply, error);
     stream.socket().shutdown(tcp::socket::shutdown_both, error);
     stream.socket().close(error);
+    return false;
 }
 
 }  // namespace
@@ -338,6 +357,7 @@ void HttpServer::run() {
     constexpr std::size_t kMaximumActiveConnections = 16;
     asio::io_context context{1};
     asio::thread_pool workers{kWorkerCount};
+    asio::thread_pool stream_workers{2};
     auto active_connections = std::make_shared<std::atomic<std::size_t>>(0);
     auto active_streams = std::make_shared<std::atomic<std::size_t>>(0);
     auto sessions = std::make_shared<StreamSessionRegistry>();
@@ -358,13 +378,16 @@ void HttpServer::run() {
         }
         asio::post(workers, [socket = std::move(socket),
                              token = config_.bearer_token,
-                             active_connections, active_streams, sessions]() mutable {
+                             active_connections, active_streams, sessions,
+                             &stream_workers]() mutable {
+            bool handed_off = false;
             try {
-                serveConnection(std::move(socket), token, sessions, active_streams);
+                handed_off = serveConnection(std::move(socket), token, sessions,
+                    active_streams, stream_workers, active_connections);
             } catch (...) {
                 // A malformed client must not terminate a worker or expose details.
             }
-            active_connections->fetch_sub(1);
+            if (!handed_off) active_connections->fetch_sub(1);
         });
     }
 }
