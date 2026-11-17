@@ -20,8 +20,9 @@ ytdlp_bin="${YOINKS_MPD_YTDLP:-/usr/local/bin/yt-dlp}"
 mpd --version 2>&1 | grep -Eiq 'curl' || fail "installed MPD build does not advertise CURL input support"
 
 choose_port() {
-    local port
+    local excluded="${1:-}" port
     for port in $(seq 19000 29999); do
+        [[ "$port" == "$excluded" ]] && continue
         if ! (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then
             printf '%s\n' "$port"
             return 0
@@ -51,8 +52,7 @@ trap cleanup EXIT INT TERM HUP
 trap 'status=$?; echo "Live test failed at line $LINENO: $BASH_COMMAND" >&2; for f in "$tmp/mpd.log" "$tmp/bridge.log"; do [[ ! -f "$f" ]] || cat "$f" >&2; done; exit "$status"' ERR
 
 mpd_port="$(choose_port)" || fail "no free TCP port for isolated MPD"
-api_port="$(choose_port)" || fail "no free TCP port for isolated bridge"
-[[ "$mpd_port" != "$api_port" ]] || fail "port allocator returned a duplicate"
+api_port="$(choose_port "$mpd_port")" || fail "no free TCP port for isolated bridge"
 
 token="$(openssl rand -base64 48 | tr -d '\n=' | tr '+/' '-_')"
 [[ ${#token} -ge 43 ]] || fail "could not generate API token"
@@ -108,9 +108,72 @@ done
 [[ "$bridge_ready" == "1" ]] || fail "Yoinks-MPD bridge did not start"
 
 info "resolving and streaming the supplied YouTube URL (yt-dlp cache/download disabled)"
+json_url="$video_url"
+json_url="${json_url//\\/\\\\}"
+json_url="${json_url//\"/\\\"}"
+json_url="${json_url//
+grep -q '"success":true' <<<"$response" || fail "queue API did not confirm success: $response"
+grep -q '"started":true' <<<"$response" || fail "MPD did not confirm play_now: $response"
+
+playing=0
+for _ in $(seq 1 200); do
+    status="$(mpc -h 127.0.0.1 -p "$mpd_port" status 2>/dev/null || true)"
+    if grep -q '\[playing\]' <<<"$status"; then
+        playing=1
+        break
+    fi
+    sleep 0.1
+done
+[[ "$playing" == "1" ]] || fail "isolated MPD did not enter playing state"
+
+playlist="$(mpc -h 127.0.0.1 -p "$mpd_port" playlist)"
+grep -Eq "^http://127\.0\.0\.1:$api_port/stream/[0-9a-f]{32}$" <<<"$playlist" \
+    || fail "MPD playlist does not contain the expected local proxy URI"
+if grep -q 'googlevideo\|youtube\.com' <<<"$playlist"; then
+    fail "MPD playlist contains an upstream URL instead of the local proxy URI"
+fi
+
+if find "$tmp" -type f \( -iname '*.mp3' -o -iname '*.m4a' -o -iname '*.webm' -o -iname '*.opus' -o -iname '*.ogg' -o -iname '*.wav' \) -print -quit | grep -q .; then
+    fail "unexpected persistent media file found in temporary test directory"
+fi
+
+info "PASS: live YouTube -> yt-dlp -> HTTPS CDN -> RAM proxy -> real MPD CURL input"
+info "MPD entered playing state; audio was discarded by the null output, not sent to speakers"
+info "MPD queue, state and database were isolated under $tmp and will be removed on exit"
+\n'/\\n}"
+json_url="${json_url//
+grep -q '"success":true' <<<"$response" || fail "queue API did not confirm success: $response"
+grep -q '"started":true' <<<"$response" || fail "MPD did not confirm play_now: $response"
+
+playing=0
+for _ in $(seq 1 200); do
+    status="$(mpc -h 127.0.0.1 -p "$mpd_port" status 2>/dev/null || true)"
+    if grep -q '\[playing\]' <<<"$status"; then
+        playing=1
+        break
+    fi
+    sleep 0.1
+done
+[[ "$playing" == "1" ]] || fail "isolated MPD did not enter playing state"
+
+playlist="$(mpc -h 127.0.0.1 -p "$mpd_port" playlist)"
+grep -Eq "^http://127\.0\.0\.1:$api_port/stream/[0-9a-f]{32}$" <<<"$playlist" \
+    || fail "MPD playlist does not contain the expected local proxy URI"
+if grep -q 'googlevideo\|youtube\.com' <<<"$playlist"; then
+    fail "MPD playlist contains an upstream URL instead of the local proxy URI"
+fi
+
+if find "$tmp" -type f \( -iname '*.mp3' -o -iname '*.m4a' -o -iname '*.webm' -o -iname '*.opus' -o -iname '*.ogg' -o -iname '*.wav' \) -print -quit | grep -q .; then
+    fail "unexpected persistent media file found in temporary test directory"
+fi
+
+info "PASS: live YouTube -> yt-dlp -> HTTPS CDN -> RAM proxy -> real MPD CURL input"
+info "MPD entered playing state; audio was discarded by the null output, not sent to speakers"
+info "MPD queue, state and database were isolated under $tmp and will be removed on exit"
+\r'/\\r}"
 response="$(curl --silent --show-error --fail --max-time 75 \
     -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
-    --data-binary "$(printf '{"url":"%s","mode":"play_now"}' "$video_url")" \
+    --data-binary "{\"url\":\"$json_url\",\"mode\":\"play_now\"}" \
     "http://127.0.0.1:$api_port/api/v1/queue")"
 grep -q '"success":true' <<<"$response" || fail "queue API did not confirm success: $response"
 grep -q '"started":true' <<<"$response" || fail "MPD did not confirm play_now: $response"
