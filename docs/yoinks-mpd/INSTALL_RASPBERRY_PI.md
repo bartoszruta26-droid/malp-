@@ -1,107 +1,66 @@
-# Instalacja Yoinks-MPD na Raspberry Pi
+# Instalacja zależności Yoinks-MPD na Raspberry Pi
 
-Status: instalator zależności i prototypu FIFO; odtwarzanie przez MPD pozostaje niezweryfikowane. Docelowa architektura to lokalny HTTP relay + MPD CURL input.
+Status: **instalator przygotowuje wyłącznie yt-dlp jako narzędzie rozwiązywania metadanych i źródła. Nie instaluje jeszcze usługi HTTP proxy.**
 
 ## Zakres
 
-Instalator obsługuje Raspberry Pi OS / Debian z APT i architektury aarch64, armv7l oraz x86_64. Pobiera oficjalny plik yt-dlp dla danej architektury, sprawdza jego SHA-256 względem upstreamowego pliku SHA2-256SUMS, instaluje go jako /usr/local/bin/yt-dlp i kopiuje producenta FIFO do /usr/local/libexec/yoinks-mpd/.
+Instalator obsługuje Raspberry Pi OS / Debian dla architektur aarch64, armv7l i x86_64. Pobiera oficjalny samodzielny plik yt-dlp, weryfikuje jego SHA-256 względem upstreamowego pliku SHA2-256SUMS i instaluje go jako `/usr/local/bin/yt-dlp`.
 
-Nie instaluje interpretera ani pakietów Python. Używa samodzielnych wydań yt-dlp. Nie instaluje, nie zatrzymuje, nie restartuje i nie konfiguruje MPD. Nie zmienia kolejki, profili MALP ani ustawień audio. Nie tworzy usługi systemd ani portu sieciowego.
+Nie instaluje, nie zatrzymuje, nie restartuje i nie konfiguruje MPD. Nie zmienia kolejki, profili MALP ani ustawień audio. Nie pobiera ani nie zapisuje plików audio. Nie tworzy jeszcze usługi HTTP proxy ani jednostki systemd.
 
 ## 1. Sprawdź urządzenie
-
-W terminalu Raspberry Pi lub przez SSH:
 
 ```bash
 uname -m
 cat /etc/os-release
-mpd --version | head -n 2
+mpd --version
 command -v mpc || true
 ```
 
-Typowe wyniki: aarch64 dla systemu 64-bitowego i armv7l dla 32-bitowego ARMv7. Architektura armv6l nie jest obsługiwana przez ten instalator.
-
 ## 2. Pobierz gałąź projektu
 
-Jeżeli repozytorium nie jest jeszcze sklonowane:
-
 ```bash
-sudo apt-get update
-sudo apt-get install -y git
 git clone --branch feature/youtube-audio-bridge --single-branch https://github.com/bartoszruta26-droid/malp-.git
 cd malp-
 ```
 
-Jeżeli repozytorium już istnieje:
+Dla istniejącego repozytorium:
 
 ```bash
-cd /ścieżka/do/malp-
 git fetch origin
 git switch feature/youtube-audio-bridge
 git pull --ff-only origin feature/youtube-audio-bridge
 ```
 
-## 3. Uruchom instalator
-
-Z katalogu głównego repozytorium:
+## 3. Zainstaluj yt-dlp
 
 ```bash
 sudo bash scripts/yoinks-mpd/install.sh
-```
-
-Instalator wymaga połączenia z Internetem. Pobiera aktualne wydanie yt-dlp z oficjalnego repozytorium, weryfikuje sumę kontrolną, a następnie sprawdza wersję programu i składnię skryptu producenta.
-
-## 4. Zweryfikuj instalację
-
-```bash
 yt-dlp --version
-sudo bash -n /usr/local/libexec/yoinks-mpd/yt-dlp-to-fifo.sh
-ls -l /usr/local/bin/yt-dlp /usr/local/libexec/yoinks-mpd/yt-dlp-to-fifo.sh
 ```
 
-## 5. Zapisz informacje o MPD
+Instalator weryfikuje sumę SHA-256 przed instalacją. Tymczasowe pobranie samego programu instalacyjnego jest sprzątane po zakończeniu. Żadne audio nie jest pobierane.
+
+## 4. Zbierz informacje o MPD
 
 ```bash
-mpd --version
-mpc version
-mpc status
+bash scripts/yoinks-mpd/diagnose-mpd-http.sh
 ```
 
-Zachowaj wyniki i przekaż je do dalszego etapu integracji. Na tym etapie nie wykonuj mpc clear, mpc add, mpc play ani zmian w mpd.conf.
+Skrypt diagnostyczny nie łączy się z produkcyjną kolejką, nie zmienia konfiguracji i nie uruchamia odtwarzania. Zbiera informacje o wersji MPD, możliwościach kompilacji, swap, zram i montowaniach.
 
-## 6. Ważne: status prototypu FIFO
+## 5. Bramka zgodności HTTP
 
-Obecny skrypt yt-dlp-to-fifo.sh obsługuje pojedynczy film i czeka, aż inny proces otworzy FIFO do odczytu. Nie uruchamiaj go samodzielnie bez czytnika, ponieważ będzie oczekiwał na odbiorcę.
+Przed implementacją i uruchomieniem proxy trzeba potwierdzić na dokładnym Raspberry Pi, że MPD odtwarza znany, krótki strumień HTTP na osobnej, odizolowanej instancji MPD. Należy zapisać rzeczywiste zachowanie GET, HEAD, Range, seek, reconnect, EOF oraz obsługę kodeka.
 
-Samo utworzenie FIFO i przesłanie przez nie bajtów nie dowodzi, że MPD może otworzyć FIFO jako źródło lokalnego pliku. Udokumentowane wtyczki pipe i fifo MPD są wyjściami PCM. Zgodność wejścia trzeba sprawdzić na dokładnej wersji MPD zainstalowanej na Raspberry Pi.
+Instrukcja: [MPD HTTP input diagnostic](MPD_HTTP_INPUT_DIAGNOSTIC.md).
 
-## 7. Bramka przed uruchomieniem odtwarzania
+Nie wykonuj testów na produkcyjnej kolejce. Nie używaj nazwanych potoków ani lokalnych plików audio jako transportu.
 
-FIFO nie jest transportem docelowym. Przed implementacją usługi C++ należy potwierdzić na dokładnym Raspberry Pi:
-1. czy zainstalowany MPD ma wejście CURL;
-2. czy odtwarza znany, krótki strumień HTTP na odizolowanej instancji MPD;
-3. jakie żądania HTTP wykonuje (GET, HEAD, Range) i jak zachowuje się przy EOF, ponownym połączeniu i seek;
-4. czy dekoder obsługuje kodek i kontener wybranego źródła;
-5. czy test nie zmienia produkcyjnej kolejki ani ustawień MPD.
+## 6. Ograniczenia
 
-Użyj skryptu `scripts/yoinks-mpd/diagnose-mpd-http.sh` i [procedury diagnostycznej](MPD_HTTP_INPUT_DIAGNOSTIC.md). Skrypt zbiera informacje, ale sam nie dowodzi odtwarzania. Jeżeli CURL input nie jest dostępny, zatrzymaj prace i podejmij osobną decyzję o aktualizacji/rekompilacji MPD albo natywnym module wejściowym C++. Nie zakładaj obsługi FIFO.
-
-## 8. Bezpieczeństwo
-
-- Nie wystawiaj MPD bezpośrednio do Internetu.
-- Nie umieszczaj hasła MPD w adresie YouTube ani w poleceniach yt-dlp.
-- Nie zmieniaj mpd.conf w ramach instalacji zależności.
-- Nie czyść kolejki MPD podczas testów.
-- Nie zapisuj pełnych plików audio; docelowy przepływ ma być strumieniowy.
-- Instalator nie uruchamia usługi sieciowej i nie dodaje kont uprzywilejowanych.
-
-## 9. Odinstalowanie
-
-Usunięcie plików dodanych przez instalator:
-
-```bash
-sudo rm -f /usr/local/bin/yt-dlp
-sudo rm -rf /usr/local/libexec/yoinks-mpd
-```
-
-Nie odinstalowuje to pakietów systemowych ani nie zmienia konfiguracji MPD.
+- Usługa HTTP proxy nie jest jeszcze zaimplementowana ani instalowana.
+- Samo zainstalowanie yt-dlp nie oznacza, że integracja działa.
+- Nie zapisuj plików audio ani cache na nośniku trwałym.
+- Docelowe bufory audio muszą być ograniczone i przechowywane wyłącznie w RAM.
+- Nie zmieniaj mpd.conf ani istniejącej kolejki podczas diagnostyki.
