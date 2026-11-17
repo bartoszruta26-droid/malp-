@@ -727,3 +727,22 @@ Zmiany zapisano w commitach: `3c78fed` (helper), `8020523`/`8d155eb`/`191845f` (
 2. Dodać test integracyjny obciążenia: dwa długie strumienie w puli stream i równoległy health request, z kontrolowanym mock readerem.
 3. Dopiero po tym rozpocząć resolver yt-dlp w trybie metadanych-only, przez `posix_spawn`/`execve`, z limitem wyjścia, timeoutem i bez zapisu audio.
 4. Nie podłączać jeszcze `POST /api/v1/queue` do MPD; zachować 503 aż resolver, sesje i queue manager będą kompletne.
+
+## Aktualizacja — kontrolowane zamykanie serwera (2026-11-17)
+
+Po przeglądzie lifecycle dodano obsługę SIGINT/SIGTERM przez `boost::asio::signal_set` oraz asynchroniczne przyjmowanie połączeń. Zamknięcie przebiega w kolejności: zamknięcie acceptora, opróżnienie puli sterującej (aby nie mogła już zgłaszać nowych zadań strumieniowych), anulowanie wszystkich sesji upstream i obudzenie czytelników bufora RAM, a następnie dołączenie puli strumieniowej. Dodano test integracyjny SIGTERM; test rozpoznaje także proces w stanie zombie przed wywołaniem `wait`.
+
+Zmiany kodu: `71ab4f6` (signal-driven shutdown), `f2dc5d1` (anulowanie oczekującego handlera sygnału po błędzie accept), `ef51f37`/`b3e6a44` (test zamykania i korekta wykrywania zakończenia procesu). README uzupełniono w `470fecc`.
+
+### Stan CI
+
+- `6cbc9dd...`: `build-and-test: success` — potwierdzono oddzielenie puli strumieniowej.
+- `191845f...`: `build-and-test: success` — potwierdzono kompilację serwera z helperem chunked i poprawiony test rozmiaru pierwszego fragmentu.
+- `226d3fc...`: wcześniejszy przebieg `failure` wynikał z niepoprawnej asercji testu (porównanie obejmowało dodatkowy bajt); kompilacja zakończyła się sukcesem. Asercję poprawiono, a następny przebieg `191845f...` przeszedł.
+- `b3e6a44...`: CI uruchomione; wynik dla testu zamykania i ostatniej korekty testu oczekuje na zakończenie.
+
+**Ograniczenie:** nie wykonano jeszcze builda na Raspberry Pi dla zmian endpointu, helpera chunked i graceful shutdown. Testy CI są wykonywane na runnerze x86_64 i nie dowodzą kompatybilności z docelowym MPD/CURL ani odtwarzania.
+
+### Następny etap
+
+Po uzyskaniu PASS dla aktualnego CI należy wykonać kontrolowany test na Raspberry Pi w osobnym katalogu tymczasowym, bez instalacji, restartu MPD i zmian kolejki. Dopiero potem kontynuować resolver yt-dlp metadanych-only z `posix_spawn`/`execve`; endpoint kolejki ma pozostać fail-closed do czasu ukończenia resolvera i MPD queue managera.
