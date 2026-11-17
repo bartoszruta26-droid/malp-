@@ -117,7 +117,7 @@ public final class YouTubeShareParser {
                 return null;
             }
             return uri.toString();
-        } catch (RuntimeException ignored) {
+        } catch (java.net.URISyntaxException | RuntimeException ignored) {
             return null;
         }
     }
