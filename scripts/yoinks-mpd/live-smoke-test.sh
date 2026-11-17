@@ -17,7 +17,8 @@ mpd_bin="${YOINKS_MPD_BIN:-/usr/local/bin/yoinks-mpd}"
 ytdlp_bin="${YOINKS_MPD_YTDLP:-/usr/local/bin/yt-dlp}"
 [[ -x "$mpd_bin" ]] || fail "Yoinks-MPD binary not executable: $mpd_bin"
 [[ -x "$ytdlp_bin" ]] || fail "yt-dlp binary not executable: $ytdlp_bin"
-mpd --version 2>&1 | grep -Eiq 'curl' || fail "installed MPD build does not advertise CURL input support"
+mpd_version="$(mpd --version 2>&1 || true)"
+grep -Eiq 'curl' <<<"$mpd_version" || fail "installed MPD build does not advertise CURL input support"
 
 choose_port() {
     local excluded="${1:-}" port
