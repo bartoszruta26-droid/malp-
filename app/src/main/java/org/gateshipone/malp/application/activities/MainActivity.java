@@ -304,7 +304,7 @@ public class MainActivity extends GenericActivity
             if (sharedPayload instanceof CharSequence) {
                 urls = YouTubeShareParser.extractYouTubeUrls(sharedPayload.toString());
             } else if (sharedPayload instanceof Iterable<?>) {
-                urls = YouTubeShareParser.extractYouTubeUrls((Iterable<?>) sharedPayload);
+                urls = YouTubeShareParser.extractYouTubeUrlsFromPayloads((Iterable<?>) sharedPayload);
             } else {
                 return;
             }
