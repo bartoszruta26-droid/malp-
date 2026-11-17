@@ -95,7 +95,14 @@ import org.gateshipone.malp.application.fragments.serverfragments.SongDetailsDia
 import org.gateshipone.malp.application.fragments.serverfragments.TagSelectFragment;
 import org.gateshipone.malp.application.utils.PermissionHelper;
 import org.gateshipone.malp.application.utils.ThemeUtils;
-import org.gateshipone.malp.application.views.CurrentPlaylistView;\nimport org.gateshipone.malp.application.youtube.YouTubeShareParser;\nimport org.gateshipone.malp.application.youtube.YouTubeAudioBridgeClient;\nimport org.gateshipone.malp.application.youtube.YouTubeBridgePreferences;\nimport java.io.IOException;\nimport java.util.List;\nimport java.util.concurrent.ExecutorService;\nimport java.util.concurrent.Executors;
+import org.gateshipone.malp.application.views.CurrentPlaylistView;
+import org.gateshipone.malp.application.views.NowPlayingView;
+import org.gateshipone.malp.application.youtube.YouTubeShareParser;
+import org.gateshipone.malp.application.youtube.YouTubeAudioBridgeClient;
+import org.gateshipone.malp.application.youtube.YouTubeBridgePreferences;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.gateshipone.malp.application.views.NowPlayingView;
 import org.gateshipone.malp.mpdservice.ConnectionManager;
 import org.gateshipone.malp.mpdservice.handlers.MPDConnectionStateChangeHandler;
@@ -274,6 +281,75 @@ public class MainActivity extends GenericActivity
 
         handleIncomingShare(getIntent());
 
+    }
+
+
+    private static final ExecutorService YOUTUBE_BRIDGE_EXECUTOR =
+            Executors.newSingleThreadExecutor();
+
+    private void handleIncomingShare(@Nullable Intent intent) {
+        if (intent == null || !Intent.ACTION_SEND.equals(intent.getAction())) return;
+        String sharedText = intent.getStringExtra(Intent.EXTRA_TEXT);
+        List<String> urls = YouTubeShareParser.extractYouTubeUrls(sharedText);
+        if (urls.isEmpty()) return;
+        if (urls.size() != 1) {
+            Snackbar.make(findViewById(R.id.drawer_layout),
+                    R.string.youtube_share_multiple_links_unsupported, Snackbar.LENGTH_LONG).show();
+            return;
+        }
+        if (!YouTubeBridgePreferences.isConfigured(this)) {
+            Snackbar.make(findViewById(R.id.drawer_layout),
+                    R.string.youtube_bridge_not_configured, Snackbar.LENGTH_LONG).show();
+            return;
+        }
+        final String url = urls.get(0);
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.youtube_share_dialog_title)
+                .setMessage(R.string.youtube_share_dialog_message)
+                .setNegativeButton(R.string.dialog_action_cancel, null)
+                .setPositiveButton(R.string.youtube_share_enqueue,
+                        (dialog, which) -> resolveYouTubeShare(url, "enqueue"))
+                .setNeutralButton(R.string.youtube_share_play_now,
+                        (dialog, which) -> resolveYouTubeShare(url, "play_now"))
+                .show();
+    }
+
+    private void resolveYouTubeShare(final String url, final String mode) {
+        final String baseUrl = YouTubeBridgePreferences.getBaseUrl(this);
+        final String token = YouTubeBridgePreferences.getToken(this);
+        Snackbar.make(findViewById(R.id.drawer_layout),
+                R.string.youtube_bridge_resolving, Snackbar.LENGTH_SHORT).show();
+        YOUTUBE_BRIDGE_EXECUTOR.execute(() -> {
+            try {
+                YouTubeAudioBridgeClient.Result result =
+                        new YouTubeAudioBridgeClient(baseUrl, token).resolve(url, mode);
+                int count = result.items.size();
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    // The bridge currently returns stable stream URIs but MPD queue
+                    // insertion is deliberately deferred until the Pi API contract
+                    // and MPD-compatible input transport are implemented together.
+                    Snackbar.make(findViewById(R.id.drawer_layout),
+                            getString(R.string.youtube_bridge_error,
+                                    "Most zwrócił " + count + " pozycji, ale wstawianie do kolejki nie jest jeszcze dostępne."),
+                            Snackbar.LENGTH_LONG).show();
+                });
+            } catch (Exception error) {
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    String message = error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
+                    Snackbar.make(findViewById(R.id.drawer_layout),
+                            getString(R.string.youtube_bridge_error, message), Snackbar.LENGTH_LONG).show();
+                });
+            }
+        });
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleIncomingShare(intent);
     }
 
     @Override
