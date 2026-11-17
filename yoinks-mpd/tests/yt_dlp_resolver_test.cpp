@@ -56,7 +56,7 @@ void testMetadataPlaylistIsParsedWithoutMediaDownload() {
         "  case \"$arg\" in --dump-single-json) mode=metadata;; --skip-download) skip=1;; --no-cache-dir) cache=1;; --ignore-config) config=1;; esac\n"
         "done\n"
         "[ \"${mode:-}\" = metadata ] && [ \"${skip:-}\" = 1 ] && [ \"${cache:-}\" = 1 ] && [ \"${config:-}\" = 1 ] || exit 64\n"
-        "printf '%s\\n' '{\"entries\":[{\"id\":\"qqAYW7uxErI\",\"title\":\"Fixture one\",\"duration\":12},{\"id\":\"dQw4w9WgXcQ\",\"title\":\"Fixture two\"}]}'\n");
+        "printf '%s\n' '{\"entries\":[{\"id\":\"qqAYW7uxErI\",\"title\":\"Fixture one\",\"duration\":12},{\"id\":\"dQw4w9WgXcQ\",\"title\":\"Fixture two\"}]}'\n");
     yoinks::YtDlpResolverConfig config;
     config.executable = executable.path();
     yoinks::YtDlpResolver resolver(config);
@@ -75,7 +75,7 @@ void testAudioUrlMustBeAllowedCdnUrl() {
         "  case \"$arg\" in --get-url) mode=url;; --skip-download) skip=1;; --no-cache-dir) cache=1;; --ignore-config) config=1;; esac\n"
         "done\n"
         "[ \"${mode:-}\" = url ] && [ \"${skip:-}\" = 1 ] && [ \"${cache:-}\" = 1 ] && [ \"${config:-}\" = 1 ] || exit 64\n"
-        "printf '%s\\n' 'https://r1---sn.googlevideo.com/videoplayback?expire=123'\n");
+        "printf '%s\n' 'https://r1---sn.googlevideo.com/videoplayback?expire=123'\n");
     yoinks::YtDlpResolverConfig config;
     config.executable = executable.path();
     yoinks::YtDlpResolver resolver(config);
@@ -155,7 +155,7 @@ void testCancellationTerminatesProcessGroup() {
             "cancellation must not wait for the process timeout");
 }
 void testAudioUrlCancellationTerminatesProcessGroup() {
-    TemporaryExecutable executable("#!/bin/sh\\nsleep 5\\nprintf '%s\\n' 'https://r1---sn.googlevideo.com/videoplayback?expire=123'\\n");
+    TemporaryExecutable executable("#!/bin/sh\nsleep 5\nprintf '%s\n' 'https://r1---sn.googlevideo.com/videoplayback?expire=123'\n");
     yoinks::YtDlpResolverConfig config;
     config.executable = executable.path();
     config.timeout_milliseconds = 10000;
