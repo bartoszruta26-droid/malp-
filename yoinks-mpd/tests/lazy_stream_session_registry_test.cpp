@@ -103,6 +103,73 @@ void testEraseCancelsResolverInFlight() {
     require(!registry.contains(id) && !registry.isFailed(id),
             "erased sessions must no longer be discoverable");
 }
+void testReleaseCancelsInFlightActivationAndAllowsFreshRetry() {
+    yoinks::LazyStreamSessionRegistry registry;
+    const auto id = registry.create("qqAYW7uxErI");
+    std::mutex mutex;
+    std::condition_variable condition;
+    bool resolver_entered = false;
+    bool allow_resolver_to_finish = false;
+    bool resolver_observed_cancel = false;
+    bool activated = true;
+
+    std::thread worker([&] {
+        activated = registry.activate(id,
+            [&](const std::string&, std::string&, const std::atomic_bool* cancellation) {
+                std::unique_lock<std::mutex> lock(mutex);
+                resolver_entered = true;
+                condition.notify_all();
+                condition.wait(lock, [&] { return cancellation->load(); });
+                resolver_observed_cancel = true;
+                condition.notify_all();
+                condition.wait(lock, [&] { return allow_resolver_to_finish; });
+                return false;
+            });
+    });
+
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        condition.wait(lock, [&] { return resolver_entered; });
+    }
+
+    require(registry.release(id, true),
+            "release should retain the queued capability and cancel its in-flight activation");
+
+    bool observed_cancel = false;
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        condition.wait(lock, [&] { return resolver_observed_cancel; });
+        observed_cancel = resolver_observed_cancel;
+    }
+    require(observed_cancel, "release must signal the active resolver cancellation token");
+
+    const bool overlapping_activation = registry.activate(
+        id, [](const std::string&, std::string&, const std::atomic_bool*) { return false; });
+    require(!overlapping_activation,
+            "release must not clear the activation reservation while the resolver is still running");
+
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        allow_resolver_to_finish = true;
+    }
+    condition.notify_all();
+    worker.join();
+
+    require(!activated && registry.contains(id),
+            "cancelled activation must finish without deleting the queued capability");
+    require(registry.activeCount() == 0,
+            "completed release cancellation must free the active slot");
+
+    bool retry_token_was_fresh = false;
+    const bool retried = registry.activate(
+        id, [&](const std::string&, std::string&, const std::atomic_bool* cancellation) {
+            retry_token_was_fresh = cancellation && !cancellation->load();
+            return false;
+        });
+    require(!retried && retry_token_was_fresh,
+            "a later explicit retry must receive a fresh, uncancelled token");
+}
+
 void testRetainOnlyPreservesInFlightActivation() {
     yoinks::LazyStreamSessionRegistry registry;
     const auto id = registry.create("qqAYW7uxErI");
@@ -187,6 +254,7 @@ int main() {
         testActivationResolvesOnlyOnDemandAndRejectsUntrustedUrl();
         testConcurrentActivationIsSingleFlight();
         testEraseCancelsResolverInFlight();
+        testReleaseCancelsInFlightActivationAndAllowsFreshRetry();
         testRetainOnlyPreservesInFlightActivation();
         testReleaseRetainsQueuedCapabilityForReplay();
         testRetainOnlyPrunesSessionsRemovedFromMpdQueue();
