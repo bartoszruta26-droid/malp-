@@ -89,7 +89,7 @@ Use a hybrid design, not a direct copy of either project:
 2. On Raspberry Pi, resolve YouTube IDs and metadata with yt-dlp using machine-readable output (`--dump-single-json` / `--flat-playlist` where appropriate), never parse human-readable progress output.
 3. Expand playlists into separate ordered MPD entries.
 4. Use a local HTTP streaming proxy on Raspberry Pi as the stable MPD URI. The proxy resolves/refreshes expiring upstream CDN URLs and streams bytes with back-pressure; it must not persist complete audio files.
-5. Configure and verify MPD's CURL input support for the local HTTP URI. This avoids pretending MPD can read an arbitrary producer FIFO as an input. Keep the local endpoint restricted to loopback/LAN and protect control endpoints with a token.
+5. Configure and verify MPD's CURL input support for the local HTTP URI. This verifies the only supported bridge media path: local HTTP proxy to MPD. Keep the local endpoint restricted to loopback/LAN and protect control endpoints with a token.
 6. Preserve normal MPD queue semantics. Do not clear the queue, enable global consume/single mode, or take over playback unless the user explicitly selected play-now.
 7. For the required Bash/C++ Pi-side constraint, implement the proxy/service and process supervision in C++ (or a carefully constrained Bash launcher); yt-dlp remains an external executable dependency. Do not introduce a Python daemon or Node.js runtime.
 8. Treat Nuffic's direct URL approach as a prototype/reference only; the local stable-URI proxy is required for long queues and URL expiry.
