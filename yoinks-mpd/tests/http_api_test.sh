@@ -8,7 +8,7 @@ log_file="$(mktemp)"
 resolver_file="$(mktemp)"
 cat >"$resolver_file" <<'RESOLVER'
 #!/bin/sh
-printf '%s\\n' '{"id":"qqAYW7uxErI","title":"HTTP integration fixture","duration":1}'
+printf '%s\n' '{"id":"qqAYW7uxErI","title":"HTTP integration fixture","duration":1}'
 RESOLVER
 chmod 700 "$resolver_file"
 YOINKS_MPD_TOKEN="$token" YOINKS_MPD_PORT="$port" \
