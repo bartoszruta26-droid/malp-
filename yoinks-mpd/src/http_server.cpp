@@ -135,8 +135,8 @@ void serveConnection(tcp::socket socket, const std::string& token) {
             stream.expires_after(std::chrono::seconds(5));
             http::write(stream, reply, error);
         }
-        socket.shutdown(tcp::socket::shutdown_both, error);
-        socket.close(error);
+        stream.socket().shutdown(tcp::socket::shutdown_both, error);
+        stream.socket().close(error);
         return;
     }
 
