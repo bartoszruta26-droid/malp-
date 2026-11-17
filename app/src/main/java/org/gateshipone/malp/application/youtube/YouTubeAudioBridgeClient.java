@@ -4,7 +4,6 @@
  */
 package org.gateshipone.malp.application.youtube;
 
-import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -16,45 +15,27 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 
-/**
- * Small synchronous HTTP client. Call from a worker thread only.
- * The bridge returns stable local MPD-readable stream URLs, never upstream CDN URLs.
- */
+/** Authenticated client for the Raspberry Pi queue API. Invoke on a worker thread. */
 public final class YouTubeAudioBridgeClient {
     private static final int CONNECT_TIMEOUT_MS = 10000;
-    private static final int READ_TIMEOUT_MS = 30000;
-    private static final int MAX_RESPONSE_BYTES = 1024 * 1024;
+    private static final int READ_TIMEOUT_MS = 65000;
+    private static final int MAX_RESPONSE_BYTES = 256 * 1024;
     private static final int MAX_ITEMS = 200;
 
-    public static final class Item {
-        public final String id;
-        public final String title;
-        public final String artist;
-        public final int durationSeconds;
-        public final String streamUrl;
-
-        Item(String id, String title, String artist, int durationSeconds, String streamUrl) {
-            this.id = id;
-            this.title = title;
-            this.artist = artist;
-            this.durationSeconds = durationSeconds;
-            this.streamUrl = streamUrl;
-        }
-    }
-
     public static final class Result {
+        public final String requestId;
         public final String title;
         public final boolean playlist;
-        public final List<Item> items;
+        public final int queued;
+        public final boolean started;
 
-        Result(String title, boolean playlist, List<Item> items) {
+        Result(String requestId, String title, boolean playlist, int queued, boolean started) {
+            this.requestId = requestId;
             this.title = title;
             this.playlist = playlist;
-            this.items = Collections.unmodifiableList(items);
+            this.queued = queued;
+            this.started = started;
         }
     }
 
@@ -62,14 +43,20 @@ public final class YouTubeAudioBridgeClient {
     private final String token;
 
     public YouTubeAudioBridgeClient(String baseUrl, String token) {
-        if (baseUrl == null || !(baseUrl.startsWith("http://") || baseUrl.startsWith("https://"))) {
-            throw new IllegalArgumentException("Bridge URL must use HTTP or HTTPS");
+        if (baseUrl == null || token == null || token.trim().isEmpty()) {
+            throw new IllegalArgumentException("Bridge URL and access token are required");
         }
-        this.baseUrl = trimTrailingSlash(baseUrl);
-        this.token = token == null ? "" : token.trim();
+        String trimmed = baseUrl.trim();
+        if (!(trimmed.startsWith("http://") || trimmed.startsWith("https://"))
+                || trimmed.indexOf('@') >= 0 || trimmed.indexOf('?') >= 0
+                || trimmed.indexOf('#') >= 0) {
+            throw new IllegalArgumentException("Bridge URL must be an HTTP(S) origin without credentials or query");
+        }
+        this.baseUrl = trimTrailingSlash(trimmed);
+        this.token = token.trim();
     }
 
-    public Result resolve(String youtubeUrl, String mode) throws IOException, JSONException {
+    public Result queue(String youtubeUrl, String mode) throws IOException, JSONException {
         if (!YouTubeShareParser.isYouTubeUrl(youtubeUrl)) {
             throw new IOException("Unsupported or invalid YouTube URL");
         }
@@ -79,7 +66,7 @@ public final class YouTubeAudioBridgeClient {
 
         HttpURLConnection connection = null;
         try {
-            URL endpoint = new URL(baseUrl + "/api/v1/resolve");
+            URL endpoint = new URL(baseUrl + "/api/v1/queue");
             connection = (HttpURLConnection) endpoint.openConnection();
             connection.setRequestMethod("POST");
             connection.setConnectTimeout(CONNECT_TIMEOUT_MS);
@@ -87,9 +74,7 @@ public final class YouTubeAudioBridgeClient {
             connection.setDoOutput(true);
             connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
             connection.setRequestProperty("Accept", "application/json");
-            if (!token.isEmpty()) {
-                connection.setRequestProperty("Authorization", "Bearer " + token);
-            }
+            connection.setRequestProperty("Authorization", "Bearer " + token);
 
             JSONObject body = new JSONObject();
             body.put("url", youtubeUrl);
@@ -103,47 +88,46 @@ public final class YouTubeAudioBridgeClient {
             int status = connection.getResponseCode();
             InputStream input = status >= 200 && status < 300
                     ? connection.getInputStream() : connection.getErrorStream();
-            String response = readBounded(input);
+            JSONObject response = new JSONObject(readBounded(input));
             if (status < 200 || status >= 300) {
-                throw new IOException("YouTube bridge HTTP " + status + ": " + response);
+                JSONObject error = response.optJSONObject("error");
+                String message = error == null
+                        ? "Bridge HTTP " + status
+                        : error.optString("message", "Bridge HTTP " + status);
+                throw new IOException(message);
             }
-            return parseResponse(new JSONObject(response));
+            return parseResponse(response);
         } finally {
             if (connection != null) connection.disconnect();
         }
     }
 
     private static Result parseResponse(JSONObject json) throws JSONException, IOException {
-        if (!json.optBoolean("success", true)) {
-            throw new IOException(json.optString("message", "Bridge could not resolve URL"));
+        if (!json.optBoolean("success", false)) {
+            JSONObject error = json.optJSONObject("error");
+            throw new IOException(error == null
+                    ? "Bridge did not confirm queue insertion"
+                    : error.optString("message", "Bridge did not confirm queue insertion"));
         }
-        JSONArray entries = json.optJSONArray("items");
-        if (entries == null || entries.length() == 0 || entries.length() > MAX_ITEMS) {
-            throw new IOException("Bridge returned an empty or oversized item list");
+        int queued = json.optInt("queued", -1);
+        if (queued < 1 || queued > MAX_ITEMS) {
+            throw new IOException("Bridge returned an invalid queued item count");
         }
-
-        List<Item> items = new ArrayList<>();
-        for (int i = 0; i < entries.length(); i++) {
-            JSONObject entry = entries.getJSONObject(i);
-            String streamUrl = entry.optString("stream_url", "");
-            String scheme = streamUrl.startsWith("http://") ? "http"
-                    : streamUrl.startsWith("https://") ? "https" : "";
-            if (scheme.isEmpty()) {
-                throw new IOException("Bridge returned a non-HTTP stream URL");
-            }
-            items.add(new Item(entry.optString("id", ""),
-                    entry.optString("title", "YouTube item " + (i + 1)),
-                    entry.optString("artist", ""), entry.optInt("duration", 0), streamUrl));
+        String requestId = json.optString("request_id", "");
+        if (requestId.isEmpty()) {
+            throw new IOException("Bridge response is missing request_id");
         }
-        return new Result(json.optString("title", ""), json.optBoolean("playlist", items.size() > 1), items);
+        return new Result(requestId, json.optString("title", ""),
+                json.optBoolean("playlist", queued > 1), queued,
+                json.optBoolean("started", false));
     }
 
     private static String readBounded(InputStream input) throws IOException {
-        if (input == null) return "";
+        if (input == null) throw new IOException("Bridge returned an empty response");
         StringBuilder result = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(input, StandardCharsets.UTF_8))) {
-            char[] buffer = new char[4096];
+            char[] buffer = new char[2048];
             int read;
             int total = 0;
             while ((read = reader.read(buffer)) != -1) {
