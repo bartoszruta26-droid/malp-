@@ -10,6 +10,8 @@ readonly RELEASE="https://github.com/yt-dlp/yt-dlp/releases/latest/download"
 readonly BIN_DIR="/usr/local/bin"
 readonly YOINKS_BIN="${BIN_DIR}/yoinks-mpd"
 readonly YTDLP_BIN="${BIN_DIR}/yt-dlp"
+readonly TEST_VIDEO_URL="https://www.youtube.com/watch?v=qqAYW7uxErI"
+readonly TEST_VIDEO_ID="qqAYW7uxErI"
 
 fail() { printf 'yoinks-mpd-install: ERROR: %s\n' "$*" >&2; exit 1; }
 info() { printf 'yoinks-mpd-install: %s\n' "$*" >&2; }
@@ -90,7 +92,23 @@ mv -f -- "${BIN_DIR}/.yt-dlp.new" "${YTDLP_BIN}"
 "${YTDLP_BIN}" --version >/dev/null || fail "zainstalowany yt-dlp nie przechodzi kontroli uruchomienia"
 [[ -x "${YOINKS_BIN}" ]] || fail "zainstalowany yoinks-mpd nie jest wykonywalny"
 
-info "WYNIK: kompilacja, testy i instalacja zakończone powodzeniem"
+info "test online: resolver YouTube (wyłącznie metadane; bez pobierania mediów)"
+resolved_id="$("${YTDLP_BIN}" \
+  --ignore-config \
+  --no-cache-dir \
+  --no-playlist \
+  --skip-download \
+  --no-progress \
+  --no-warnings \
+  --socket-timeout 20 \
+  --retries 1 \
+  --extractor-retries 1 \
+  --print '%(id)s' \
+  "${TEST_VIDEO_URL}" 2>/dev/null)" || fail "yt-dlp nie zdołał odczytać metadanych filmu testowego; sprawdź łączność i dostępność filmu"
+[[ "${resolved_id}" == "${TEST_VIDEO_ID}" ]] || fail "resolver zwrócił inny identyfikator niż oczekiwany film testowy"
+info "resolver rozpoznał oczekiwany film: ${TEST_VIDEO_ID}; pobieranie audio było wyłączone"
+
+info "WYNIK: kompilacja, testy, instalacja i test metadanych zakończone powodzeniem"
 info "yoinks-mpd: ${YOINKS_BIN}"
 info "yt-dlp: ${YTDLP_BIN} (resolver metadanych/adresu źródłowego; bez pobierania mediów)"
 if have mpd; then
@@ -106,6 +124,6 @@ else
   info "nie wykryto polecenia mpd; nie instalowano MPD"
 fi
 
-info "UWAGA: to wydanie Yoinks-MPD jest nadal szkieletem API. Nie ma jeszcze gotowego endpointu strumienia HTTP ani integracji kolejki MPD."
+info "UWAGA: test online potwierdza wyłącznie rozpoznanie filmu. To wydanie Yoinks-MPD jest nadal szkieletem API; nie ma gotowego endpointu strumienia HTTP ani integracji kolejki MPD."
 info "Skrypt nie tworzy ani nie uruchamia usługi systemd, nie zmienia konfiguracji MPD, nie czyści kolejki i nie zapisuje mediów na dysku."
 info "Transport mediów pozostaje wyłącznie HTTP proxy; żadne FIFO, potoki nazwane ani pliki audio nie są używane."
