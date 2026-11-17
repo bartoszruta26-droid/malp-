@@ -108,3 +108,10 @@ Known successful additions are rolled back with `deleteid` if MPD explicitly rej
 The registry is bounded to 200 queued session records and at most two simultaneously activating/active upstreams. Aggregate active RAM buffers are capped at 8 MiB. Concurrent activation of the same item is single-flight. Erasing a session or clearing the registry signals a shared cancellation flag to the resolver and cancels any active upstream stream.
 
 This registry is currently an isolated component with unit tests; the HTTP queue endpoint and stream handler have not yet been switched to it. The queue endpoint remains fail-closed (`503 backend_not_ready`) until the complete resolver → lazy registry → MPD queue flow is integrated and validated.
+## Status integracji — aktualizacja 2026-11-17
+
+Przebieg GitHub Actions dla commita `dc5d174d2413cf5c0dc2f635c5ed8694184ba6f3` zakończył się powodzeniem. Test resolvera sprawdza anulowanie `yt-dlp` podczas rozwiązywania bezpośredniego adresu audio: proces ma zakończyć się przed timeoutem, a wynikowy URL pozostać pusty.
+
+Resolver, `LazyStreamSessionRegistry` i `MpdQueueManager` są zaimplementowanymi i testowanymi komponentami bibliotecznymi. Nie są jednak jeszcze połączone z serwerem HTTP. Serwer nadal używa starego `StreamSessionRegistry`, endpoint `/stream/{id}` nie aktywuje lazy sesji, a `POST /api/v1/queue` celowo zwraca `503 backend_not_ready`. `control_ready` pozostaje `false`.
+
+Zaliczenie CI nie oznacza testu na Raspberry Pi ani potwierdzenia zgodności konkretnej wersji MPD/CURL. Usługa nie jest jeszcze gotowa do odtwarzania end-to-end.
