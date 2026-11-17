@@ -6,6 +6,8 @@
 
 #include <curl/curl.h>
 
+#include <algorithm>
+#include <cctype>
 #include <limits>
 #include <stdexcept>
 #include <utility>
@@ -18,14 +20,29 @@ bool validResolvedUrl(const std::string& value) {
     if (parsed == nullptr) return false;
     const CURLUcode set_result = curl_url_set(parsed, CURLUPART_URL, value.c_str(), 0);
     char* scheme = nullptr;
+    char* host = nullptr;
     char* user = nullptr;
     char* password = nullptr;
-    const bool valid = set_result == CURLUE_OK
+    bool valid = set_result == CURLUE_OK
             && curl_url_get(parsed, CURLUPART_SCHEME, &scheme, 0) == CURLUE_OK
             && std::string(scheme) == "https"
+            && curl_url_get(parsed, CURLUPART_HOST, &host, 0) == CURLUE_OK
             && curl_url_get(parsed, CURLUPART_USER, &user, 0) != CURLUE_OK
             && curl_url_get(parsed, CURLUPART_PASSWORD, &password, 0) != CURLUE_OK;
+    if (valid) {
+        std::string normalized_host(host);
+        std::transform(normalized_host.begin(), normalized_host.end(),
+                normalized_host.begin(), [](unsigned char character) {
+                    return static_cast<char>(std::tolower(character));
+                });
+        constexpr char suffix[] = ".googlevideo.com";
+        valid = normalized_host == "googlevideo.com"
+                || (normalized_host.size() > sizeof(suffix) - 1
+                    && normalized_host.compare(normalized_host.size() - sizeof(suffix) + 1,
+                            sizeof(suffix) - 1, suffix) == 0);
+    }
     curl_free(scheme);
+    curl_free(host);
     curl_free(user);
     curl_free(password);
     curl_url_cleanup(parsed);
@@ -152,8 +169,8 @@ void HttpUpstreamStream::run(std::string url) {
     curl_easy_setopt(curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
     curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTPS);
 #endif
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
+    // Do not follow redirects to arbitrary HTTPS hosts. Resolve/refresh through yt-dlp instead.
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 0L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, config_.connect_timeout_seconds);
     curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT,
                      config_.low_speed_limit_bytes_per_second);
