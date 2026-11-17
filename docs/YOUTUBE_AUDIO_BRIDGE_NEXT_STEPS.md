@@ -464,3 +464,5 @@ No production binary installation or service restart without explicit user appro
 - Added `testConcurrentLifecycleStressMaintainsRegistryAccounting()` in commit `a2a5b046a550a6ae9fbbe9b56841188c7befb8dc`, with concurrent activation/release/reconciliation/observation workers over 16 live sessions and bounded iteration counts.
 - The test checks that all workers complete, live sessions remain retained, no activation reservations remain after joining, and clear/shutdown leave an empty registry.
 - CI run `44123745133` is pending for this exact commit. The sanitizer workflow is also being validated; check the completed workflow's sanitizer configure, build, and test steps before requesting Raspberry Pi sanitizer execution.
+
+- Stress-test assertion was hardened in follow-up commit `c063439c`: the counter now records each attempted `activate()` call before the operation, so the test does not depend on a resolver winning a thread-scheduling race. CI for the corrected head remains pending.
