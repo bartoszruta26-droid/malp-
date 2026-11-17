@@ -9,6 +9,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -16,12 +17,19 @@
 
 namespace yoinks {
 
+using UpstreamTransportForTests = std::function<bool(
+    const std::string&,
+    const std::function<bool(const std::uint8_t*, std::size_t)>&,
+    const std::atomic_bool*)>;
+
 struct HttpUpstreamConfig {
     std::size_t buffer_capacity{256 * 1024};
     std::uint64_t maximum_bytes{512ULL * 1024ULL * 1024ULL};
     long connect_timeout_seconds{10};
     long low_speed_limit_bytes_per_second{1024};
     long low_speed_time_seconds{30};
+    // Deterministic transport injection for integration tests only; production leaves this empty.
+    UpstreamTransportForTests transport_override_for_tests;
 };
 
 enum class UpstreamState {
