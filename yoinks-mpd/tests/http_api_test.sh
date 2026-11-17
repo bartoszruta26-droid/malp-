@@ -10,19 +10,24 @@ log_file="$(mktemp)"
 resolver_file="$(mktemp)"
 mpd_log="$(mktemp)"
 resolver_log="$(mktemp)"
+stream_ids_file="$(mktemp)"
 cat >"$resolver_file" <<'RESOLVER'
 #!/usr/bin/env bash
 set -euo pipefail
+read_next=0
 for argument in "$@"; do
     if [[ "$argument" == "--get-url" ]]; then
-        printf '%s\n' "get-url" >>"$YOINKS_FIXTURE_LOG"
-        # Deliberately invalid CDN host: the proxy must reject it before opening
-        # an upstream connection or claiming successful media delivery.
+        read_next=1
+        continue
+    fi
+    if [[ "$read_next" == "1" ]]; then
+        printf '%s\n' "$argument" >>"$YOINKS_FIXTURE_LOG"
+        # Deliberately invalid CDN host: reject before opening an upstream connection.
         printf '%s\n' 'https://not-googlevideo.example/audio'
         exit 0
     fi
 done
-printf '%s\n' '{"id":"qqAYW7uxErI","title":"HTTP integration fixture","duration":1}'
+printf '%s\n' '{"entries":[{"id":"qqAYW7uxErI","title":"Playlist item 1","duration":1},{"id":"dQw4w9WgXcQ","title":"Playlist item 2","duration":1},{"id":"abcdefghijk","title":"Playlist item 3","duration":1}]}'
 RESOLVER
 chmod 700 "$resolver_file"
 
@@ -36,7 +41,7 @@ cleanup() {
     fi
     kill "$mpd_pid" 2>/dev/null || true
     wait "$mpd_pid" 2>/dev/null || true
-    rm -f "$log_file" "$resolver_file" "$mpd_log" "$resolver_log"
+    rm -f "$log_file" "$resolver_file" "$mpd_log" "$resolver_log" "$stream_ids_file"
 }
 trap cleanup EXIT
 
@@ -80,20 +85,15 @@ grep -q '"control_ready":true' <<<"$health"
 grep -q '"media_ready":false' <<<"$health"
 grep -q '"mpd_playback_verified":false' <<<"$health"
 
-# Stream route rejects unsupported methods and Range rather than returning misleading media.
 invalid_stream_status="$(curl --silent -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/stream/invalid")"
 [[ "$invalid_stream_status" == "404" ]]
-
 head_stream_status="$(curl --silent -I -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/stream/0123456789abcdef0123456789abcdef")"
 [[ "$head_stream_status" == "405" ]]
-
 range_stream_status="$(curl --silent -o /dev/null -w '%{http_code}' -H 'Range: bytes=0-99' "http://127.0.0.1:$port/stream/0123456789abcdef0123456789abcdef")"
 [[ "$range_stream_status" == "501" ]]
-
 unknown_stream_status="$(curl --silent -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/stream/0123456789abcdef0123456789abcdef")"
 [[ "$unknown_stream_status" == "404" ]]
 
-# Multiple independent clients must be served concurrently.
 seq 1 8 | xargs -P 8 -I '{}' sh -c \
     'curl --silent --show-error --fail "http://127.0.0.1:'"$port"'/api/v1/health" >/dev/null'
 
@@ -102,44 +102,47 @@ unauthorized_status="$(curl --silent -o /dev/null -w '%{http_code}' \
     -d '{"url":"https://youtu.be/dQw4w9WgXcQ","mode":"enqueue"}' \
     "http://127.0.0.1:$port/api/v1/queue")"
 [[ "$unauthorized_status" == "401" ]]
-
 invalid_mode_status="$(curl --silent -o /dev/null -w '%{http_code}' \
     -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
     -d '{"url":"https://youtu.be/dQw4w9WgXcQ","mode":"clear"}' \
     "http://127.0.0.1:$port/api/v1/queue")"
 [[ "$invalid_mode_status" == "400" ]]
-
 invalid_url_status="$(curl --silent -o /dev/null -w '%{http_code}' \
     -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
     -d '{"url":"https://youtube.com.evil.example/watch?v=dQw4w9WgXcQ","mode":"enqueue"}' \
     "http://127.0.0.1:$port/api/v1/queue")"
 [[ "$invalid_url_status" == "422" ]]
 
-# End-to-end control-plane path: HTTP -> yt-dlp metadata -> lazy local proxy URI -> MPD.
+# HTTP -> yt-dlp playlist metadata -> lazy local proxy sessions -> MPD queue.
 queue_response="$(curl --silent --show-error \
     -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
     -d '{"url":"https://www.youtube.com/watch?v=qqAYW7uxErI","mode":"enqueue"}' \
     "http://127.0.0.1:$port/api/v1/queue")"
 grep -q '"success":true' <<<"$queue_response"
-grep -q '"queued":1' <<<"$queue_response"
+grep -q '"queued":3' <<<"$queue_response"
 grep -q '^playlistinfo$' "$mpd_log"
-grep -Eq '^addid "http://127\.0\.0\.1:18787/stream/[0-9a-f]{32}"$' "$mpd_log"
+[[ "$(grep -c '^addid "http://127\.0\.0\.1:18787/stream/[0-9a-f]{32}"$' "$mpd_log")" == "3" ]]
 if grep -q 'googlevideo\|youtube\.com' "$mpd_log"; then
     echo "MPD must receive only local proxy URLs" >&2
     exit 1
 fi
 
-# A GET for the queued URI must lazily invoke yt-dlp --get-url. The fixture then
-# returns a deliberately disallowed host; the proxy must reject it with 502.
-stream_id="$(grep -Eo '/stream/[0-9a-f]{32}' "$mpd_log" | head -n 1 | cut -d/ -f3)"
-[[ "$stream_id" =~ ^[0-9a-f]{32}$ ]]
+# GET every local URI in MPD insertion order; each one must resolve its own video ID.
+grep -Eo '/stream/[0-9a-f]{32}' "$mpd_log" | cut -d/ -f3 >"$stream_ids_file"
+[[ "$(wc -l <"$stream_ids_file")" -eq 3 ]]
+[[ "$(sort -u "$stream_ids_file" | wc -l)" -eq 3 ]]
 stream_body="$(mktemp)"
-stream_status="$(curl --silent --show-error -o "$stream_body" -w '%{http_code}' \
-    "http://127.0.0.1:$port/stream/$stream_id")"
-[[ "$stream_status" == "502" ]]
-grep -q 'stream_activation_failed' "$stream_body"
-grep -q '^get-url$' "$resolver_log"
-rm -f "$stream_body"
+while IFS= read -r stream_id; do
+    stream_status="$(curl --silent --show-error -o "$stream_body" -w '%{http_code}' "http://127.0.0.1:$port/stream/$stream_id")"
+    [[ "$stream_status" == "502" ]]
+    grep -q 'stream_activation_failed' "$stream_body"
+done <"$stream_ids_file"
+printf '%s\n' \
+    'https://www.youtube.com/watch?v=qqAYW7uxErI' \
+    'https://www.youtube.com/watch?v=dQw4w9WgXcQ' \
+    'https://www.youtube.com/watch?v=abcdefghijk' >"$resolver_file.expected"
+diff -u "$resolver_file.expected" "$resolver_log"
+rm -f "$stream_body" "$resolver_file.expected"
 
 large_body="$(printf '%*s' 17000 '' | tr ' ' 'a')"
 large_status="$(curl --silent -o /dev/null -w '%{http_code}' \
@@ -147,7 +150,6 @@ large_status="$(curl --silent -o /dev/null -w '%{http_code}' \
     --data-binary "$large_body" "http://127.0.0.1:$port/api/v1/queue")"
 [[ "$large_status" == "413" ]]
 
-# SIGTERM must close the listener and drain the worker pools cleanly.
 kill -TERM "$server_pid"
 shutdown_complete=0
 for _ in $(seq 1 50); do
