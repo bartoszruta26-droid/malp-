@@ -1105,3 +1105,20 @@ Obserwator oparty na `idle` jest asynchroniczny. Jeżeli MALP doda URL i natychm
 - [ ] Włączenie obserwatora po przejściu bramek.
 
 **Wniosek:** potwierdzony jest już rzeczywisty dźwięk z obecnej ścieżki API. Nowy wariant MALP → MPD → obserwator jest wykonalny jako rozszerzenie procesu Yoinks-MPD, ale nie został jeszcze zaimplementowany. Nie wolno aktywować destrukcyjnej podmiany bieżącego utworu ani zakładać, że MPD przyjmie surowy URL YouTube bez testu.
+
+
+## Implementacja etapu 1 — transport MPD idle (2026-11-17)
+
+Dodano izolowany, jednorazowy komponent `MpdPlaylistWatcher`:
+
+- otwiera własne połączenie TCP do MPD i subskrybuje wyłącznie `idle playlist`;
+- rozpoznaje `changed: playlist` i końcowe `OK`;
+- ignoruje zdarzenia innych podsystemów, np. `player`;
+- ma ograniczenie czasu operacji i rozmiaru odpowiedzi;
+- odrzuca konfiguracje inne niż loopback;
+- nie wysyła poleceń mutujących, nie usuwa utworów, nie uruchamia odtwarzania i nie zmienia trybów MPD;
+- jest jednorazowym prymitywem transportowym: właściciel pętli obserwatora odpowiada za ponawianie subskrypcji oraz pobranie świeżego snapshotu na osobnym połączeniu.
+
+Dodano testy protokołu dla zdarzenia playlisty, zdarzenia niezwiązanego z playlistą oraz odrzucenia zdalnego hosta.
+
+**Ograniczenie etapu:** komponent nie jest jeszcze podłączony do `main.cpp` i nie konwertuje URL. To celowe: najpierw weryfikujemy zachowanie protokołu bez aktywowania automatycznej ingerencji w produkcyjną kolejkę. Następny etap obejmuje pełny snapshot `playlistinfo` + `status`, cykl życia subskrypcji oraz testy wyścigów przed jakąkolwiek podmianą wpisu.

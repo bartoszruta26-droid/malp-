@@ -27,6 +27,7 @@ add_library(yoinks_mpd_core
     src/http_upstream_stream.cpp
     src/lazy_stream_session_registry.cpp
     src/mpd_queue_manager.cpp
+    src/mpd_playlist_watcher.cpp
     src/stream_session_registry.cpp
     src/yt_dlp_resolver.cpp
     src/youtube_queue_service.cpp
@@ -87,6 +88,12 @@ if(YOINKS_MPD_BUILD_TESTS)
         $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic;-Werror>
     )
     add_test(NAME mpd_queue_manager COMMAND yoinks_mpd_queue_manager_tests)
+    add_executable(yoinks_mpd_playlist_watcher_tests tests/mpd_playlist_watcher_test.cpp)
+    target_link_libraries(yoinks_mpd_playlist_watcher_tests PRIVATE yoinks_mpd_core)
+    target_compile_options(yoinks_mpd_playlist_watcher_tests PRIVATE
+        $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic;-Werror>
+    )
+    add_test(NAME mpd_playlist_watcher COMMAND yoinks_mpd_playlist_watcher_tests)
     add_executable(yoinks_mpd_lazy_session_tests tests/lazy_stream_session_registry_test.cpp)
     target_link_libraries(yoinks_mpd_lazy_session_tests PRIVATE yoinks_mpd_core)
     target_compile_options(yoinks_mpd_lazy_session_tests PRIVATE
