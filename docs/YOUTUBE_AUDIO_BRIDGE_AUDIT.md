@@ -254,3 +254,12 @@ All six reported cases passed: binary FIFO transfer and cleanup; playlist reject
 
 
 - **Intermediate CI finding:** the first build of the buffer-test change failed under `-Werror=reorder` because the constructor initializer list did not follow member declaration order. Corrected the initializer order; no runtime algorithm change. The final combined commit must pass Release and ASan/UBSan CI before this stage is accepted.
+
+
+## Deterministic bounded-buffer back-pressure tests — CI accepted (2026-11-17)
+
+- Final combined revision `2f59ce15` passed GitHub Actions run `44137984940`.
+- Release configure/build and full CTest passed; Debug ASan/UBSan configure/build and full CTest also passed. All workflow steps completed successfully.
+- The earlier intermediate build failures were due to the member initializer list order being inconsistent with declaration order under `-Werror=reorder`; this was corrected before the successful run.
+- The buffer tests now wait for explicit notification that the producer is blocked by a full buffer before draining or cancelling. The optional test callback is unset in production use.
+- Remaining gate: reproduce normal and sanitizer validation on the Raspberry Pi target. This CI result does not establish hardware playback, live YouTube/CDN behavior, or target-device timing.
