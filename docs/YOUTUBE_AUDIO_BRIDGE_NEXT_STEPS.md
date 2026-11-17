@@ -393,3 +393,16 @@ Nie publikować APK jako „gotowego do instalacji” na podstawie samego CI. Wy
 - Next lifecycle cases after this gate: `erase()`/ `clear()` during post-start/pre-publication, and `retainOnly()`/slot accounting while a stream is being published. Then continue slow-consumer/back-pressure, shutdown, and DNS/SSRF review.
 
 - CI run `44107862029` for `5c202ecd` completed successfully (configure/build/test). Raspberry Pi execution remains the next required verification gate.
+
+## Lifecycle verification update — 2026-11-17
+
+- Completed and verified post-start/pre-publication race tests for `erase()` and `clear()` in commit `7914ae676fc6f646d87853807353d6dff8cf5987`.
+- CI run `44108836398` passed for that exact commit. Raspberry Pi build, targeted lazy-session test, and full CTest also passed (11/11, 5.49 s).
+- Production service and binary were left unchanged; service active, zero restarts, original binary hash retained.
+- Remaining lifecycle work:
+  1. Add a deterministic `retainOnly()` test for the post-start/pre-publication interval, verifying that an in-flight activation is retained or pruned according to the intended live-ID/active-reservation contract.
+  2. Audit slot accounting across concurrent activate/release/erase/clear/retainOnly operations, including repeated activation and retry after cancellation.
+  3. Test registry destruction/shutdown while activation is paused after upstream start; verify worker cancellation/join and absence of use-after-free.
+  4. Then continue back-pressure, slow consumer/client disconnect, upstream timeout/error, reconnect/re-resolution, byte limits, and DNS/SSRF review.
+- Keep live YouTube/CDN retrieval, target MPD CURL capability, audible hardware playback, and RAM-only/no-persistent-storage verification as separate acceptance gates. Do not deploy or restart the production service without explicit approval.
+
