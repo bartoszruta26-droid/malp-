@@ -21,16 +21,16 @@ This directory is the working area for implementation, audits, test evidence, an
 
 ## Main audit\n\n- [Professional architecture audit and implementation plan](AUDYT_ARCHITEKTURY_I_PLAN_REALIZACJI.md) — current-state findings, target architecture, security, RAM-only controls, acceptance tests, risks, and staged delivery plan.\n\n## Work stages
 
-- [ ] W0 — Inspect current branch, repository layout, existing implementation, and build/test setup.
-- [ ] W1 — Repair and complete Android share/preferences/client integration.
-- [ ] W2 — Define and implement the Raspberry Pi C++ bridge service and authenticated API.
-- [ ] W3 — Implement stable local HTTP streaming relay with bounded RAM buffers and back-pressure.
-- [ ] W4 — Implement yt-dlp metadata/URL resolution and playlist expansion without media downloads.
-- [ ] W5 — Integrate with the existing MPD daemon and verify CURL input compatibility.
-- [ ] W6 — Implement cancellation, process supervision, error handling, and safe cleanup.
-- [ ] W7 — Add automated tests for security, queue behavior, RAM bounds, and absence of persistent media writes.
-- [ ] W8 — Run Android build/tests, Pi-side tests, and target-device integration/regression tests.
-- [ ] W9 — Update installation documentation and final audit; only then consider merge.
+- [x] W0 — Align documentation on the selected HTTP relay architecture; FIFO is explicitly prototype-only.
+- [ ] W1 — Verify CURL input and real HTTP playback on the exact Raspberry Pi MPD build (hardware evidence pending).
+- [ ] W2 — Define the authenticated API contract and security limits.
+- [ ] W3 — Build the Raspberry Pi C++ service skeleton.
+- [ ] W4 — Implement yt-dlp metadata resolution and playlist expansion without media downloads.
+- [ ] W5 — Implement the stable local HTTP relay with bounded RAM buffers and back-pressure.
+- [ ] W6 — Implement MPD queue management, cancellation, process supervision and cleanup.
+- [ ] W7 — Complete Android Java share integration and secure token storage.
+- [ ] W8 — Run automated tests, Raspberry Pi hardware tests and RAM-only verification.
+- [ ] W9 — Complete release audit; do not merge until every acceptance gate passes.
 
 ## Evidence policy
 
@@ -50,3 +50,11 @@ Repository-side inspection is not a substitute for compiling or running the serv
 - The agreed architecture uses a local HTTP streaming endpoint and requires MPD CURL input support on the exact target build.
 - The existing Android share path was previously incomplete; re-audit current source before editing.
 - yt-dlp must be invoked for metadata/URL resolution only, with cache disabled; never invoke media download or file-writing postprocessors.
+
+
+## Latest work (2026-11-17)
+
+- W0 documentation alignment completed: HTTP relay + MPD CURL input is the selected target; FIFO is explicitly prototype-only.
+- Added a read-only Raspberry Pi diagnostic: `scripts/yoinks-mpd/diagnose-mpd-http.sh`.
+- Added the procedure: `docs/yoinks-mpd/MPD_HTTP_INPUT_DIAGNOSTIC.md`.
+- W1 remains **blocked pending target-device evidence**. The diagnostic script has not been run on the Raspberry Pi in this environment, and no successful HTTP playback is claimed.
