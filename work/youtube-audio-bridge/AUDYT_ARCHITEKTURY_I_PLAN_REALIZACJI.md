@@ -673,3 +673,38 @@ Serwer ma stałą pulę czterech wątków i limit 16 zaakceptowanych/zleconych p
 ## Aktualizacja — rejestr sesji strumieniowych (2026-11-17)
 
 Dodano `StreamSessionRegistry`: domyślnie maksymalnie cztery sesje, konfiguracyjny limit maksymalny 32. Każda sesja utrzymuje pojedynczy producent HTTPS i bufor o stałej pojemności; łączna alokacja buforów wszystkich sesji ma twardy limit 8 MiB. Identyfikatory sesji są generowane przez systemowy `getrandom(2)` (128 bitów), bez ujawniania adresów CDN. Dodano testy odrzucania nieprawidłowych źródeł, nieznanych identyfikatorów i nadmiernego limitu sesji. Rejestr nie jest jeszcze połączony z endpointem strumieniowym ani API kolejki.
+
+
+## Aktualizacja wykonania — endpoint HTTP i izolacja puli strumieniowej (2026-11-17)
+
+### Kontrola CI poprzedniego etapu
+
+Commit `56c6133f483d9b30961d5c48670bc723b5886906` uzyskał `build-and-test: success` w GitHub Actions (job `133907788368`, zakończony 2026-11-17 08:13:28 UTC).
+
+### Lokalny endpoint mediów
+
+Zaimplementowano `GET /stream/{opaque-id}` w `yoinks-mpd/src/http_server.cpp`: sesja jest wyszukiwana w `StreamSessionRegistry`, odpowiedź używa `Transfer-Encoding: chunked`, a dane są wysyłane progresywnie w blokach do 16 KiB. Bufor upstream pozostaje ograniczony w RAM i zachowuje back-pressure. Terminujący chunk HTTP jest wysyłany wyłącznie po poprawnym zakończeniu upstream; przy błędzie/niepełnym strumieniu połączenie kończy się bez fałszywego EOF. Sesja jest usuwana po zakończeniu lub błędzie.
+
+Endpoint odrzuca HEAD i inne metody kodem 405, Range kodem 501 (`Accept-Ranges: none`), niepoprawne i nieznane identyfikatory kodem 404. Nie dodano publicznego endpointu tworzenia sesji. Zwykły `POST /api/v1/queue` nadal zwraca 503, ponieważ resolver yt-dlp i MPD queue manager nie są gotowe.
+
+### Izolacja współbieżności
+
+Commit `6cbc9dd3ef80e038960b9ffbffb25c0fa244b72c` przenosi obsługę aktywnego streamu z czterowątkowej puli sterującej do osobnej puli dwóch wątków. Limit aktywnych streamów pozostaje równy 2, a limit zaakceptowanych połączeń pozostaje równy 16. Po przekazaniu połączenia do puli streamów licznik połączeń jest zwalniany przez worker streamu po zamknięciu socketu, a nie przez worker sterujący.
+
+### Testy i status weryfikacji
+
+- CI dla `56c6133...`: PASS.
+- CI dla `6cbc9dd...`: uruchomione; wynik oczekuje na zakończenie. Nie oznaczać nowego refaktoru jako zweryfikowanego do czasu uzyskania wyniku.
+- Testy integracyjne endpointu sprawdzają 404, 405 i 501 oraz równoległe żądania health. Nie ma jeszcze pozytywnego testu przesyłania bajtów przez prawdziwą sesję; normalny flow nie potrafi jeszcze tworzyć sesji.
+- Nie wykonano ponownego builda na Raspberry Pi dla tych nowych commitów.
+
+### Ograniczenia i kolejne bramki
+
+1. Dodać kontrolowany test pozytywnej ścieżki streamu z mockowanym źródłem/readerem, bez osłabiania produkcyjnej allowlisty `googlevideo.com` i bez niezabezpieczonego endpointu tworzenia sesji.
+2. Zweryfikować lifecycle i graceful shutdown puli strumieniowej; obecny serwer pracuje w pętli accept bez kompletnej obsługi sygnałów zamknięcia.
+3. Dodać resolver yt-dlp przez `posix_spawn`/`execve`, z metadanymi-only, limitami stdout/stderr, timeoutem, anulowaniem procesu i bez logowania signed URL.
+4. Dodać MPD protocol queue manager dopiero po testach kontraktu i potwierdzeniu zachowania docelowego MPD.
+5. Zachować fail-closed 503 dla `/api/v1/queue` do czasu ukończenia resolvera i managera kolejki.
+6. Uzyskać aktualny wynik build/test na Raspberry Pi; poprzedni PASS na Pi dotyczy wcześniejszego stanu przed endpointem i osobną pulą.
+
+**Ocena:** endpoint strumieniowy i osobna pula zostały zaimplementowane w kodzie, lecz nie są jeszcze połączone z kolejką. Nie ma podstaw do stwierdzenia, że odtwarzanie YouTube działa end-to-end.
