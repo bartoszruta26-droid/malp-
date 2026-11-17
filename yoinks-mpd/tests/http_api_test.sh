@@ -8,8 +8,10 @@ log_file="$(mktemp)"
 YOINKS_MPD_TOKEN="$token" YOINKS_MPD_PORT="$port" "$binary" > /dev/null 2>"$log_file" &
 server_pid=$!
 cleanup() {
-    kill "$server_pid" 2>/dev/null || true
-    wait "$server_pid" 2>/dev/null || true
+    if [[ -n "$server_pid" ]]; then
+        kill "$server_pid" 2>/dev/null || true
+        wait "$server_pid" 2>/dev/null || true
+    fi
     rm -f "$log_file"
 }
 trap cleanup EXIT
@@ -80,5 +82,22 @@ large_status="$(curl --silent -o /dev/null -w '%{http_code}' \
     -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
     --data-binary "$large_body" "http://127.0.0.1:$port/api/v1/queue")"
 [[ "$large_status" == "413" ]]
+
+# SIGTERM must close the listener and drain the worker pools cleanly.
+kill -TERM "$server_pid"
+shutdown_complete=0
+for _ in $(seq 1 50); do
+    if ! kill -0 "$server_pid" 2>/dev/null; then
+        shutdown_complete=1
+        break
+    fi
+    sleep 0.1
+done
+if [[ "$shutdown_complete" -ne 1 ]]; then
+    echo "HTTP server did not shut down after SIGTERM" >&2
+    exit 1
+fi
+wait "$server_pid"
+server_pid=""
 
 echo "HTTP API integration tests passed"
