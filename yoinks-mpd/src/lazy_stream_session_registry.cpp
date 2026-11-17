@@ -68,6 +68,12 @@ bool LazyStreamSessionRegistry::activate(const std::string& id, const ResolveAud
         const auto found = sessions_.find(id);
         if (found == sessions_.end() || found->second.activating || found->second.serving) return false;
 
+        // A previous release(cancel_upstream=true) may have cancelled an
+        // in-flight resolver. Give a later, explicit retry a fresh token.
+        if (!found->second.cancellation || found->second.cancellation->load()) {
+            found->second.cancellation = std::make_shared<std::atomic_bool>(false);
+        }
+
         if (found->second.stream && !found->second.refresh_required
                 && found->second.stream->state() == UpstreamState::running) {
             found->second.serving = true;
@@ -194,8 +200,13 @@ bool LazyStreamSessionRegistry::release(const std::string& id, bool cancel_upstr
         found->second.serving = false;
         if (cancel_upstream) {
             found->second.refresh_required = true;
-            found->second.activating = true;
-            reserved_slot = true;
+            if (found->second.cancellation) found->second.cancellation->store(true);
+            // An activation already owns the reservation. Leave its flag set
+            // until that activation observes cancellation and finishes.
+            if (!found->second.activating) {
+                found->second.activating = true;
+                reserved_slot = true;
+            }
             stream = std::move(found->second.stream);
         } else if (found->second.stream
                 && found->second.stream->state() != UpstreamState::running) {
