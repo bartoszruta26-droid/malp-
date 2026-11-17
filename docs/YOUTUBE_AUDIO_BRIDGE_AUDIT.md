@@ -145,3 +145,15 @@ All six reported cases passed: binary FIFO transfer and cleanup; playlist reject
 - **Verification status:** source changes are pushed to `feature/youtube-audio-bridge`; GitHub Actions and Raspberry Pi build/CTest are pending. Do not treat this fix as verified until both are checked. No production binary was installed and no service was restarted.
 
 - **CI result:** GitHub Actions run `44107862029` for exact test commit `5c202ecdd2491933f3f32427afcf6260bb318d1e` completed with conclusion `success`; configure, build, and test steps all passed. Raspberry Pi execution of this new test remains pending.
+
+## Lifecycle race: erase() and clear() after upstream start, before publication — 2026-11-17
+
+- Added deterministic regression tests in commit `7914ae676fc6f646d87853807353d6dff8cf5987`:
+  - `testEraseDuringStartedButUnpublishedStreamDoesNotRecreateSession()` verifies that `erase()` removes the session and releases its visible reservation while the activation worker is paused after upstream start; after cancellation and worker completion, the erased session is not recreated.
+  - `testClearDuringStartedButUnpublishedStreamDoesNotRecreateSession()` verifies equivalent behavior for `clear()`.
+- The test seam remains an unset-by-default configuration callback used to pause the activation deterministically. The current header and implementation both use `after_upstream_start_for_tests`.
+- GitHub Actions run `44108836398` for the exact commit `7914ae676fc6f646d87853807353d6dff8cf5987` completed successfully: configure/build/test job passed.
+- Raspberry Pi verification: the user pulled exact commit `7914ae67`; build succeeded, targeted lazy-session tests passed, and all **11/11 CTest tests passed** in 5.49 seconds.
+- Production service remained `active/running`, `NRestarts=0`; production binary SHA-256 remained `21bbe326959062c7d036a5f069bcd6dca7de0a02eccb0ee3a048d9c6eadbf8f8`. No production binary installation, service restart, MPD queue change, or playback intervention occurred.
+- These tests prove the targeted registry lifecycle behavior under deterministic scheduling. They do not establish live YouTube/CDN playback, audible hardware output, or the full DNS/SSRF threat model.
+
