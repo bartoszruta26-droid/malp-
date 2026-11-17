@@ -110,7 +110,7 @@ void testProcessTimeoutIsEnforced() {
 
 
 void testCancellationTerminatesProcessGroup() {
-    TemporaryExecutable executable("#!/bin/sh\\nsleep 5\\n");
+    TemporaryExecutable executable("#!/bin/sh\nsleep 5\n");
     yoinks::YtDlpResolverConfig config;
     config.executable = executable.path();
     config.timeout_milliseconds = 10000;
