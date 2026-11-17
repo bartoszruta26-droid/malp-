@@ -101,6 +101,16 @@ void testEraseCancelsResolverInFlight() {
     require(!registry.contains(id) && !registry.isFailed(id),
             "erased sessions must no longer be discoverable");
 }
+void testReleaseRetainsQueuedCapabilityForReplay() {
+    yoinks::LazyStreamSessionRegistry registry;
+    const auto id = registry.create("qqAYW7uxErI");
+    require(registry.release(id, true), "release should relinquish a stream reader");
+    require(registry.contains(id) && registry.size() == 1,
+            "releasing a stream must retain its queue capability for replay/reconnect");
+    require(registry.activeCount() == 0,
+            "releasing an inactive session must not consume an upstream slot");
+}
+
 void testSessionAndBufferLimitsAreValidated() {
     yoinks::LazyStreamSessionRegistryConfig config;
     config.maximum_active_streams = 2;
@@ -122,6 +132,7 @@ int main() {
         testActivationResolvesOnlyOnDemandAndRejectsUntrustedUrl();
         testConcurrentActivationIsSingleFlight();
         testEraseCancelsResolverInFlight();
+        testReleaseRetainsQueuedCapabilityForReplay();
         testSessionAndBufferLimitsAreValidated();
         std::cout << "All lazy stream session tests passed\n";
         return 0;
