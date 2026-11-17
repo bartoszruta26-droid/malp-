@@ -342,6 +342,84 @@ void testClearDuringStartedButUnpublishedStreamDoesNotRecreateSession() {
             "the cancelled unpublished activation must finish without recreating a cleared session");
 }
 
+void testRetainOnlyPreservesUnpublishedActivationAndSlotAccounting() {
+    std::mutex mutex;
+    std::condition_variable condition;
+    bool after_start_entered = false;
+    bool allow_publication = false;
+
+    yoinks::LazyStreamSessionRegistryConfig config;
+    config.maximum_active_streams = 1;
+    config.upstream.connect_timeout_seconds = 1;
+    config.upstream.test_connect_to_for_tests =
+            "rr1.googlevideo.com:443:127.0.0.1:1";
+    config.after_upstream_start_for_tests = [&] {
+        std::unique_lock<std::mutex> lock(mutex);
+        after_start_entered = true;
+        condition.notify_all();
+        condition.wait(lock, [&] { return allow_publication; });
+    };
+    yoinks::LazyStreamSessionRegistry registry(config);
+    const auto first_id = registry.create("qqAYW7uxErI");
+    const auto second_id = registry.create("dQw4w9WgXcQ");
+    require(!first_id.empty() && !second_id.empty(),
+            "both test capabilities must be created");
+
+    bool first_activated = false;
+    std::thread worker([&] {
+        first_activated = registry.activate(first_id,
+            [](const std::string&, std::string& url, const std::atomic_bool*) {
+                url = "https://rr1.googlevideo.com/audio.bin";
+                return true;
+            });
+    });
+
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        condition.wait(lock, [&] { return after_start_entered; });
+    }
+
+    require(registry.activeCount() == 1 && registry.contains(first_id),
+            "the unpublished upstream must own exactly one active slot");
+    require(registry.retainOnly({}) == 0,
+            "retainOnly must preserve an in-flight unpublished activation");
+    require(registry.contains(first_id) && registry.activeCount() == 1,
+            "the retained unpublished activation must keep its capability and slot");
+
+    const bool second_activated_early = registry.activate(second_id,
+        [](const std::string&, std::string&, const std::atomic_bool*) {
+            return false;
+        });
+    require(!second_activated_early,
+            "a second session must not exceed the single active-stream slot");
+
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        allow_publication = true;
+    }
+    condition.notify_all();
+    worker.join();
+
+    require(first_activated && registry.activeCount() == 1,
+            "publishing the retained upstream must preserve one active slot");
+    require(registry.release(first_id, true),
+            "the first stream must be releasable before retrying the second session");
+    require(registry.activeCount() == 0,
+            "releasing the first stream must free the active slot");
+
+    const bool second_activated = registry.activate(second_id,
+        [](const std::string&, std::string& url, const std::atomic_bool*) {
+            url = "https://rr1.googlevideo.com/audio.bin";
+            return true;
+        });
+    require(second_activated,
+            "the second session must activate after the first stream releases its slot");
+    require(registry.release(second_id, true),
+            "the second stream must be releasable for deterministic cleanup");
+    require(registry.activeCount() == 0,
+            "cleanup must leave no active stream slots");
+}
+
 void testRetainOnlyPreservesInFlightActivation() {
     yoinks::LazyStreamSessionRegistry registry;
     const auto id = registry.create("qqAYW7uxErI");
@@ -430,6 +508,7 @@ int main() {
         testReleaseDuringStartedButUnpublishedStreamFreesReservation();
         testEraseDuringStartedButUnpublishedStreamDoesNotRecreateSession();
         testClearDuringStartedButUnpublishedStreamDoesNotRecreateSession();
+        testRetainOnlyPreservesUnpublishedActivationAndSlotAccounting();
         testRetainOnlyPreservesInFlightActivation();
         testReleaseRetainsQueuedCapabilityForReplay();
         testRetainOnlyPrunesSessionsRemovedFromMpdQueue();
