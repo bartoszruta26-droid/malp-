@@ -209,3 +209,5 @@ All six reported cases passed: binary FIFO transfer and cleanup; playlist reject
 
 
 - Follow-up test hardening: commit `c063439c` counts each activation attempt before calling `activate()`, rather than requiring the resolver to win a scheduling race. This makes the bounded workload-completion assertion deterministic under different thread schedules. CI for this corrected head is pending.
+
+- **Sanitizer CI result:** run `44123520539` for commit `fd9a330f` completed successfully. The normal Release configure/build/CTest and the separate Debug AddressSanitizer + UndefinedBehaviorSanitizer configure/build/full CTest all passed. This validates the sanitizer configuration and test suite at that revision; the later bounded-stress test commit is being re-run separately.
