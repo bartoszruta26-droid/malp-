@@ -109,3 +109,40 @@ Use a hybrid design, not a direct copy of either project:
 - Simulate CDN URL expiry and verify transparent re-resolution while the local MPD URI remains unchanged.
 - Test pause/resume/seek/next/stop and queue behavior against the existing MPD instance.
 - Test service authentication, loopback/LAN binding, process limits, cancellation, and cleanup.
+
+
+## Hard requirement: RAM-only, real-time playback (confirmed 2026-11-17)
+
+The user explicitly requires music to be played in-flight. No complete audio file may be written to persistent storage. RAM buffering is permitted; disk, SSD, SD-card, USB-storage, and persistent-cache buffering is forbidden.
+
+This is a hard acceptance requirement, not an optimization.
+
+### Required runtime behavior
+
+- yt-dlp is used only for metadata / stream URL resolution (e.g. machine-readable JSON and URL extraction). Do not use its download-to-file mode.
+- Stream audio bytes from YouTube through a bounded in-memory buffer to the local HTTP endpoint consumed by MPD.
+- Never create temporary audio files, converted audio files, segment files, playlist downloads, or persistent cache entries.
+- Disable yt-dlp cache (for example, pass `--no-cache-dir` where applicable); do not set a persistent cache directory.
+- Do not use `--extract-audio`, `--output`, `-o`, or any postprocessor that writes media files.
+- Avoid shell pipelines that can spill to disk. Use C++ process APIs with argv arrays / pipes, not shell interpolation.
+- Keep only bounded buffers in RAM; apply back-pressure so slow MPD consumption cannot cause unbounded memory growth.
+- Playlist expansion resolves each item independently and queues separate local stream URIs; it does not download playlist media.
+- On stop, next, client disconnect, failure, or service shutdown, cancel the producer and release RAM buffers, sockets, and child processes.
+- Do not persist upstream signed CDN URLs or authentication tokens in MPD's database, logs, or config. MPD queue entries should contain only local stable proxy URIs.
+- Do not log full signed media URLs or request credentials. Logs may contain sanitized video IDs, status, and error classes.
+- Review Linux swap/zram policy on supported Raspberry Pi images. zram is RAM-backed and acceptable; disk-backed swap can write pages to persistent storage and must be disabled or otherwise proven not to persist media buffers if the user's no-disk requirement is to be guaranteed.
+
+### RAM and storage verification tests
+
+1. Run the bridge with a dedicated temporary directory and assert that no audio/media files are created anywhere on persistent mount points.
+2. Trace file opens/writes by yt-dlp, the bridge, and MPD during playback; reject writes of media payloads to persistent storage.
+3. Verify yt-dlp cache is disabled and no postprocessor/download path is invoked.
+4. Monitor resident memory during a long track and playlist; prove buffer usage remains under a configured bound.
+5. Simulate a slow MPD reader and verify producer back-pressure rather than buffer growth or disk spill.
+6. Stop playback and verify producer processes, sockets, and buffers are released.
+7. Test a long playlist and ensure only metadata / small queue state is retained, not audio payloads.
+8. Record swap configuration in the Raspberry Pi installation audit; distinguish RAM-backed zram from disk-backed swap.
+
+### Architecture clarification
+
+The local HTTP proxy is a streaming relay, not a download manager. It must stream bytes progressively from the upstream YouTube CDN to MPD with a bounded RAM buffer. A design that first downloads a complete item and then serves it over HTTP is explicitly rejected.
