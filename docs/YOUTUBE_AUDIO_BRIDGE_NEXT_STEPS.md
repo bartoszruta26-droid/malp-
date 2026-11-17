@@ -298,3 +298,13 @@ Nie publikować APK jako „gotowego do instalacji” na podstawie samego CI. Wy
 - The HTTP integration fixture has now been expanded from one video to a three-item playlist. It verifies three independent local MPD stream URIs and requests each in the same order, checking that yt-dlp is invoked with the corresponding video IDs in that order.
 - The playlist-order extension is committed as bad818262fc004f02231c9964a50ea9861bbccce. Its CI result is pending at the time of this audit update.
 - Media-byte relay is still not proven: the stream test deliberately uses an invalid CDN host to exercise rejection. The next acceptance test must exercise a successful TLS-verified upstream response and confirm the exact bytes reach the local HTTP stream consumer. Hardware MPD playback remains unverified.
+
+
+### Successful byte-stream fixture and CI test correction — 2026-11-17
+
+- Added a narrowly scoped C++ test transport injection to HttpUpstreamStream. Production main does not configure this override; normal operation continues to use libcurl with HTTPS/TLS verification, redirects disabled, the googlevideo host allowlist and bounded RAM buffering.
+- Added a separate HTTP stream fixture server that wires the real YtDlpResolver, LazyStreamSessionRegistry, YoutubeQueueService, MpdQueueManager and HttpServer together with the isolated mock MPD.
+- The fixture supplies deterministic bytes in 7-byte producer chunks. Its shell integration test sends an authenticated YouTube queue request, obtains the opaque local MPD URI, requests /stream/{id}, and compares the exact returned HTTP chunked body with the expected payload.
+- CI run 44089142175 built this fixture and reported http_stream_byte_integration PASS. The other HTTP playlist integration test failed at that revision because its playlist-count assertion was malformed; this is a test assertion failure, not a C++ build failure.
+- The playlist assertion and resolver-fixture argument parsing were corrected in subsequent commits. The latest workflow run for the corrected revision must pass before the whole C++ suite is marked green.
+- The byte fixture validates the local producer → bounded RAM buffer → HTTP chunked response path. It does not prove a real libcurl TLS session to YouTube/googlevideo or playback by MPD on the Raspberry Pi. Those remain separate acceptance gates.
