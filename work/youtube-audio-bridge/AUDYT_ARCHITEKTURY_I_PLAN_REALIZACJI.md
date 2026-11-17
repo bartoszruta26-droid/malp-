@@ -668,3 +668,8 @@ To nadal wyłącznie komponent upstream → RAM. Brakuje stabilnego rejestru ses
 ## Aktualizacja — współbieżność i ekspozycja API (2026-11-17)
 
 Serwer ma stałą pulę czterech wątków i limit 16 zaakceptowanych/zleconych połączeń; nadmiar otrzymuje 503. Adres nasłuchu musi być loopback — konfiguracja adresu LAN jest odrzucana do czasu zaprojektowania TLS. Test integracyjny obejmuje osiem równoległych żądań health. Długie połączenia strumieniowe będą wymagały osobnego, ograniczonego wykonawcy, aby nie blokować API sterującego.
+
+
+## Aktualizacja — rejestr sesji strumieniowych (2026-11-17)
+
+Dodano `StreamSessionRegistry`: domyślnie maksymalnie cztery sesje, konfiguracyjny limit maksymalny 32. Każda sesja utrzymuje pojedynczy producent HTTPS i bufor o stałej pojemności. Identyfikatory sesji są generowane przez systemowy `getrandom(2)` (128 bitów), bez ujawniania adresów CDN. Dodano testy odrzucania nieprawidłowych źródeł, nieznanych identyfikatorów i nadmiernego limitu sesji. Rejestr nie jest jeszcze połączony z endpointem strumieniowym ani API kolejki.
