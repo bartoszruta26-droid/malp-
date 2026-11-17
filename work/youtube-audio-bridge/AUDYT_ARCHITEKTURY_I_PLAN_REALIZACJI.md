@@ -93,7 +93,7 @@ Audyt wykonano na plikach gałęzi `feature/youtube-audio-bridge`. Poniższe obs
 7. **Bezpieczeństwo klienta wymaga poprawy.** Token jest opcjonalny, a adres usługi dopuszcza zwykłe HTTP. Odpowiedź akceptuje dowolne adresy HTTP(S) jako `stream_url`, bez sprawdzenia, czy host i port należą do skonfigurowanej usługi.
 8. **Sekret w SharedPreferences.** Token jest zapisany w zwykłych preferencjach aplikacji; należy przenieść go do magazynu opartego na Android Keystore.
 9. **Globalne `usesCleartextTraffic=true`.** Manifest dopuszcza nieszyfrowany ruch HTTP w całej aplikacji. Należy ograniczyć wyjątek do jawnie skonfigurowanego, zaufanego LAN albo wymagać HTTPS.
-10. **Parser URL wymaga dopracowania.** Lista hostów zawiera powtórzony wpis `www.youtube.com`; kod ma warunek dla `www.youtu.be`, którego nie ma na allowliście. Parser sprawdza host i ścieżkę, ale nie wymaga poprawnego identyfikatora filmu dla `/watch`; potrzebne są testy przypadków granicznych i parametrów.
+10. **Parser URL — częściowo poprawiony.** Usunięto powtórzony host, dodano walidację 11-znakowego identyfikatora filmu oraz identyfikatora playlisty, a ścieżki `/watch`, `/playlist`, `/shorts`, `/live`, `/embed` i `youtu.be` są sprawdzane dokładniej. Dodano testy jednostkowe przypadków poprawnych i błędnych; wykonanie testów Gradle pozostaje niepotwierdzone.
 11. **Instalator nie instaluje usługi.** Pobranie yt-dlp nie oznacza, że powstał daemon, serwer API, proxy ani integracja MPD.
 12. **Brak testów usługi i odtwarzania.** W repozytorium nie ma obecnie testów C++ proxy ani dowodu odtwarzania przez MPD.
 
@@ -102,7 +102,7 @@ Audyt wykonano na plikach gałęzi `feature/youtube-audio-bridge`. Poniższe obs
 | Obszar | Ocena | Uzasadnienie |
 |---|---|---|
 | Android share | Częściowy prototyp | Pojedynczy ACTION_SEND i dialog; brak pełnego przepływu |
-| Parser YouTube | Częściowy | Allowlista jest dobrym początkiem, ale wymaga testów i korekt |
+| Parser YouTube | Utwardzony kodowo; testy nieuruchomione | Ścisła walidacja hosta, ścieżki i identyfikatorów; dodano przypadki testowe |
 | Klient HTTP Android | Częściowy | Klient istnieje, lecz nie ma serwera po drugiej stronie |
 | Ustawienia bridge | Częściowe | URL/token są zapisywane; brak bezpiecznego magazynu i walidacji |
 | C++ HTTP proxy | Brak | Nie ma jeszcze implementacji serwera ani relay |
@@ -577,3 +577,32 @@ Przed implementacją C++ relay należy otrzymać z docelowego Raspberry Pi rapor
 Użytkownik jednoznacznie potwierdził, że wymaga **HTTP proxy**, a nie FIFO. Niniejsza decyzja zastępuje wszystkie wcześniejsze warianty i opisy prototypu. Named pipes, lokalne pliki audio i buforowanie na dysku są wykluczone z projektu. Jedyną ścieżką danych jest: MALP → API sterujące → yt-dlp (metadane/adres źródła, bez pobierania mediów) → C++ HTTP proxy z ograniczonym buforem RAM → stabilny lokalny HTTP URI → MPD CURL input.
 
 W ramach korekty usunięto z gałęzi skrypt producenta nazwanego potoku i jego testy. Instalator został zmieniony tak, aby instalował wyłącznie yt-dlp jako zależność resolvera; nie instaluje jeszcze proxy. Dokumentacja główna i instrukcja instalacji zostały zastąpione opisem HTTP-only. Implementacja C++ HTTP proxy pozostaje następnym zasadniczym etapem i nie jest jeszcze wykonana.
+
+
+## Aktualizacja prac — kontrakt API i parser Android (2026-11-17)
+
+### W2 — kontrakt Control API v1
+
+**Status: SPECYFIKACJA UTWORZONA.** Dodano `docs/yoinks-mpd/API_CONTRACT_V1.md`. Dokument określa uwierzytelnianie Bearer, endpointy health/queue/request, format JSON, kody błędów, limity, semantykę enqueue/play_now, rollback MPD i kontrakt lokalnego endpointu HTTP dla MPD. Serwer nie jest jeszcze zaimplementowany; nie jest to działające API.
+
+### Android — utwardzenie parsera URL
+
+Zmieniono `YouTubeShareParser.java`:
+- usunięto zduplikowany wpis hosta;
+- dopuszczone są wyłącznie dokładne hosty z allowlisty HTTPS;
+- identyfikator filmu musi mieć 11 znaków dozwolonego alfabetu;
+- identyfikator playlisty musi mieć od 10 do 128 znaków;
+- walidowane są konkretne ścieżki watch, playlist, shorts, live, embed i youtu.be;
+- odrzucono niedozwolone poddomeny i dodatkowe segmenty ścieżki.
+
+Rozszerzono `YouTubeShareParserTest.java` o przypadki nieprawidłowego identyfikatora filmu/playlisty, ścieżek Shorts/Live i nieoczekiwanych hostów.
+
+**Weryfikacja:** pliki zostały zapisane na gałęzi. Nie wykonano Gradle/JUnit, więc testy są dodane, ale ich wynik pozostaje niezweryfikowany. Nie deklarować PASS do czasu uruchomienia `./gradlew testDebugUnitTest`.
+
+### Następne prace
+
+1. W3: wybrać i udokumentować biblioteki HTTP/TLS/JSON dostępne w docelowym Raspberry Pi OS; dodać CMake i szkielet C++ z health/auth oraz testami.
+2. W1: równolegle uzyskać raport z docelowego Raspberry Pi potwierdzający MPD CURL input i zachowanie żądań HTTP.
+3. Dopasować Android klient do POST /api/v1/queue; usunąć założenie, że serwer zwraca stream_url.
+4. Dodać bezpieczny magazyn tokenu Android Keystore i zawęzić globalne cleartext traffic po audycie pozostałych funkcji MALP.
+
