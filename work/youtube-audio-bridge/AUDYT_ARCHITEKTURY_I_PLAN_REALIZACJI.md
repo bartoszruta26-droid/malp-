@@ -1006,3 +1006,19 @@ Niniejsza sekcja jest nadrzędna wobec wcześniejszych fragmentów tego dokument
 - Serwer Yoinks-MPD nadal nasłuchuje wyłącznie na `127.0.0.1:8788`. Nie wolno wystawiać tego portu bezpośrednio do sieci LAN/Internetu.
 - Dodano przykład `deploy/nginx/yoinks-mpd-https.conf.example`: TLS 1.2/1.3, przekazanie API do loopback, wyłączenie buforowania i plików tymczasowych Nginx oraz blokada zdalnego dostępu do `/stream/` (ten endpoint jest przeznaczony wyłącznie dla lokalnego MPD).
 - Przykład wymaga podstawienia rzeczywistej nazwy hosta i certyfikatu TLS. Nie został wdrożony ani przetestowany na Raspberry Pi. Instalator nadal nie konfiguruje Nginx, certyfikatu ani usługi systemd.
+
+
+## Instalator systemd — 2026-11-17
+
+Dodano kompletny instalator `scripts/yoinks-mpd/install.sh` oraz jednostkę `scripts/yoinks-mpd/yoinks-mpd.service`.
+
+- Instalator buduje C++17 Release, uruchamia pełny CTest i dopiero po sukcesie instaluje binarium.
+- Pobiera oficjalny yt-dlp i sprawdza SHA-256 z upstreamowego `SHA2-256SUMS`.
+- Tworzy systemowego użytkownika `yoinks-mpd`, token o wysokiej entropii i plik `/etc/yoinks-mpd/yoinks-mpd.env` z uprawnieniami 0600.
+- Instaluje i domyślnie uruchamia ograniczoną usługę systemd: loopback only, bez roota, bez capabilities, z limitami zadań/pamięci, read-only systemem plików i prywatnym /tmp.
+- `--no-start` pozwala zainstalować i włączyć usługę bez uruchamiania jej; `--check-youtube` dodaje opcjonalny test samych metadanych.
+- Instalator nie instaluje, nie konfiguruje, nie restartuje ani nie modyfikuje MPD i nie dotyka kolejki.
+- Nie konfiguruje TLS ani dostępu zdalnego; serwer pozostaje związany z 127.0.0.1.
+- Dodano `scripts/yoinks-mpd/INSTALL.md` z procedurą instalacji i ograniczeniami oraz rozszerzono CI o składnię Bash, pomoc instalatora i walidację jednostki systemd.
+- Wynik CI dla zmian instalatora musi zostać oceniony po zakończeniu workflow; do tego czasu nie uznawać walidacji za zaliczoną.
+
