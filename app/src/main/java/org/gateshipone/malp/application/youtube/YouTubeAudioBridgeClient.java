@@ -47,10 +47,10 @@ public final class YouTubeAudioBridgeClient {
             throw new IllegalArgumentException("Bridge URL and access token are required");
         }
         String trimmed = baseUrl.trim();
-        if (!(trimmed.startsWith("http://") || trimmed.startsWith("https://"))
+        if (!trimmed.startsWith("https://")
                 || trimmed.indexOf('@') >= 0 || trimmed.indexOf('?') >= 0
                 || trimmed.indexOf('#') >= 0) {
-            throw new IllegalArgumentException("Bridge URL must be an HTTP(S) origin without credentials or query");
+            throw new IllegalArgumentException("Bridge URL must be an HTTPS origin without credentials or query");
         }
         this.baseUrl = trimTrailingSlash(trimmed);
         this.token = token.trim();
