@@ -157,35 +157,44 @@ MpdQueueResult MpdQueueManager::enqueue(const std::vector<std::string>& stream_u
         return result;
     }
 
-    for (const auto& uri : stream_uris) {
-        const auto reply = command(stream, buffer, "addid \"" + uri + "\"", deadline);
+    std::vector<std::uint32_t> added_song_ids;
+    std::vector<std::uint32_t> song_ids_by_input(stream_uris.size(), 0);
+    added_song_ids.reserve(stream_uris.size());
+
+    for (std::size_t step = 0; step < stream_uris.size(); ++step) {
+        // Insert play-now entries at position zero in reverse order. The final
+        // MPD playlist then contains the requested block in its original order,
+        // ahead of the existing queue, without deleting or clearing old entries.
+        const std::size_t index = play_now ? stream_uris.size() - 1 - step : step;
+        std::string add_command = "addid \"" + stream_uris[index] + "\"";
+        if (play_now) add_command += " 0";
+        const auto reply = command(stream, buffer, add_command, deadline);
         std::uint32_t id = 0;
         if (!reply.success) {
-            result.rollback_complete = rollback(stream, buffer, result.song_ids, deadline);
+            result.rollback_complete = rollback(stream, buffer, added_song_ids, deadline);
             if (!reply.rejected) result.rollback_complete = false;
             result.error_code = reply.rejected ? "mpd_add_rejected" : "mpd_add_outcome_unknown";
             if (result.rollback_complete) {
                 result.queued = 0;
                 result.song_ids.clear();
             } else {
+                result.song_ids = added_song_ids;
                 result.queued = result.song_ids.size();
             }
             return result;
         }
         if (!parseSongId(reply, id)) {
-            result.rollback_complete = rollback(stream, buffer, result.song_ids, deadline);
+            result.rollback_complete = rollback(stream, buffer, added_song_ids, deadline);
             result.rollback_complete = false;
             result.error_code = "mpd_add_response_invalid";
-            if (result.rollback_complete) {
-                result.queued = 0;
-                result.song_ids.clear();
-            } else {
-                result.queued = result.song_ids.size();
-            }
+            result.song_ids = added_song_ids;
+            result.queued = result.song_ids.size();
             return result;
         }
-        result.song_ids.push_back(id);
+        added_song_ids.push_back(id);
+        song_ids_by_input[index] = id;
     }
+    result.song_ids = song_ids_by_input;
 
     if (play_now) {
         const auto reply = command(stream, buffer, "playid "
