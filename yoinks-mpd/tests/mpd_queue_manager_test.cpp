@@ -71,7 +71,28 @@ private:
                 std::string line;
                 std::getline(input, line);
                 commands_.push_back(line);
-                if (line.rfind("addid ", 0) == 0) {
+                if (line == "command_list_ok_begin") {
+                    std::vector<std::string> batch;
+                    for (;;) {
+                        boost::system::error_code batch_error;
+                        asio::read_until(socket, buffer, '\\n', batch_error);
+                        if (batch_error) return;
+                        std::istream batch_input(&buffer);
+                        std::string batch_line;
+                        std::getline(batch_input, batch_line);
+                        commands_.push_back(batch_line);
+                        if (batch_line == "command_list_end") break;
+                        batch.push_back(batch_line);
+                    }
+                    if (batch.size() != 2 || batch[0] != "playlistinfo" || batch[1] != "status") {
+                        send(socket, "ACK [5@0] {command_list} invalid test batch\\n");
+                        continue;
+                    }
+                    send(socket,
+                        "file: http://127.0.0.1:8788/stream/0123456789abcdef0123456789abcdef\\n"
+                        "Id: 700\\nPos: 0\\nTitle: Test track\\nlist_OK\\n"
+                        "songid: 700\\nstate: play\\nOK\\n");
+                } else if (line.rfind("addid ", 0) == 0) {
                     ++add_count;
                     if (drop_add_response_ && add_count == 1) return;
                     if (fail_second_add_ && add_count == 2) {
@@ -233,9 +254,10 @@ void testFullPlaylistStateIncludesStableIdsPositionsAndPlayerStatus() {
             "snapshot should preserve song ID, position and URI");
     require(snapshot.state == "play" && snapshot.current_song_id == 700,
             "snapshot should include current player state and song ID");
-    require(mock.commands().size() == 2 && mock.commands()[0] == "playlistinfo"
-            && mock.commands()[1] == "status",
-            "snapshot must use read-only playlistinfo and status commands");
+    require(mock.commands().size() == 4 && mock.commands()[0] == "command_list_ok_begin"
+            && mock.commands()[1] == "playlistinfo" && mock.commands()[2] == "status"
+            && mock.commands()[3] == "command_list_end",
+            "snapshot must use one read-only MPD command list");
 }
 
 void testInvalidProxyUriIsRejectedBeforeConnecting() {

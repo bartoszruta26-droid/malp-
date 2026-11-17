@@ -277,9 +277,59 @@ MpdPlaylistStateSnapshot MpdQueueManager::listPlaylistState() const {
         return result;
     }
 
-    const auto playlist = command(stream, buffer, "playlistinfo", deadline, 8192, 1024 * 1024);
-    if (!playlist.success) {
-        result.error_code = playlist.rejected ? "mpd_playlistinfo_rejected" : "mpd_playlistinfo_failed";
+    // MPD command lists keep both read operations in one protocol transaction,
+    // preventing a client-side gap between playlistinfo and status.
+    const std::string batch = "command_list_ok_begin\\nplaylistinfo\\nstatus\\ncommand_list_end\\n";
+    if (!writeCommand(stream, batch, deadline)) {
+        result.error_code = "mpd_snapshot_write_failed";
+        return result;
+    }
+    CommandReply playlist;
+    CommandReply status;
+    bool status_section = false;
+    bool saw_separator = false;
+    std::size_t response_bytes = 0;
+    for (std::size_t count = 0; count < 8320; ++count) {
+        std::string line;
+        if (!readLine(stream, buffer, line, deadline)) {
+            result.error_code = "mpd_snapshot_read_failed";
+            return result;
+        }
+        response_bytes += line.size() + 1;
+        if (response_bytes > 1024 * 1024) {
+            result.error_code = "mpd_snapshot_response_too_large";
+            return result;
+        }
+        if (line == "ACK " || line.rfind("ACK ", 0) == 0) {
+            result.error_code = "mpd_snapshot_rejected";
+            return result;
+        }
+        if (line == "list_OK") {
+            if (saw_separator || status_section) {
+                result.error_code = "mpd_snapshot_protocol_invalid";
+                return result;
+            }
+            saw_separator = true;
+            status_section = true;
+            continue;
+        }
+        if (line == "OK") {
+            if (!saw_separator || !status_section) {
+                result.error_code = "mpd_snapshot_protocol_invalid";
+                return result;
+            }
+            playlist.success = true;
+            status.success = true;
+            break;
+        }
+        (status_section ? status.lines : playlist.lines).push_back(std::move(line));
+        if (count == 8319) {
+            result.error_code = "mpd_snapshot_response_too_large";
+            return result;
+        }
+    }
+    if (!playlist.success || !status.success) {
+        result.error_code = "mpd_snapshot_protocol_invalid";
         return result;
     }
 
