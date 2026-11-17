@@ -406,9 +406,27 @@ Nie publikować APK jako „gotowego do instalacji” na podstawie samego CI. Wy
   4. Then continue back-pressure, slow consumer/client disconnect, upstream timeout/error, reconnect/re-resolution, byte limits, and DNS/SSRF review.
 - Keep live YouTube/CDN retrieval, target MPD CURL capability, audible hardware playback, and RAM-only/no-persistent-storage verification as separate acceptance gates. Do not deploy or restart the production service without explicit approval.
 
-### Additional lifecycle test added — awaiting verification
+### Additional lifecycle test — verified
 
-- Added `testRetainOnlyPreservesUnpublishedActivationAndSlotAccounting()` in commit `f326fd26b5b9385d97c3e4ca47035e97eb266580`.
-- The deterministic test pauses activation after upstream start and before publication, calls `retainOnly({})`, verifies that the in-flight session and its single active slot are preserved, rejects a second activation at the configured one-stream limit, then verifies that releasing the first stream frees the slot for the second session.
-- CI and Raspberry Pi build/test results for this new commit are not yet confirmed. Do not mark this test as passed until both gates complete.
+- Added `testRetainOnlyPreservesUnpublishedActivationAndSlotAccounting()`; its final corrected form uses `retainOnly({second_id})`. The initial empty live-ID set legitimately pruned the inactive second session, so the original expectation of zero removals was a test-design error, not an implementation defect.
+- Final test commit: `6e880cb9e5a15014a5e3e290bb019548147d23ba`.
+- GitHub Actions run `44118536311` passed for that exact commit.
+- The user confirmed a successful Raspberry Pi build, targeted lazy-session test, and full CTest **11/11 passed** in 5.17 seconds. The checkout was clean and HEAD matched origin.
+- This gate is complete. Do not infer live YouTube/CDN or audible hardware playback from fixture-based integration tests.
 
+## Current verification state — 2026-11-17
+
+- Current tested feature commit: `6e880cb9e5a15014a5e3e290bb019548147d23ba`.
+- GitHub Actions run `44118536311`: success.
+- Raspberry Pi: targeted lazy-session tests passed; full CTest **11/11 passed** in 5.17 seconds; clean working tree.
+- The production service and installed binary were not changed by this test cycle.
+
+## Next implementation sequence
+
+1. **Registry shutdown/destruction race:** design a deterministic test where an activation is paused after upstream worker start but before stream publication while registry destruction begins. First inspect object-lifetime ownership: `clear()` currently removes sessions, but that alone does not prove that concurrent `activate()` calls have exited before the registry's mutex/configuration are destroyed. Do not add a test that invokes methods on an already-destroyed object or rely on undefined behavior. If a real lifetime gap is confirmed, implement explicit shutdown coordination (reject new operations, signal cancellation, wait for in-flight registry operations to leave) with careful condition-variable/RAII accounting, then test cancellation, worker join, and absence of use-after-free under sanitizers where available.
+2. Audit concurrent `activate()`, `release()`, `erase()`, `clear()`, and `retainOnly()` transitions, including repeated retries, token replacement, and active-slot accounting.
+3. Exercise slow consumers/back-pressure, client disconnect, upstream timeout/error, byte-limit enforcement, reconnect/re-resolution, and service shutdown.
+4. Complete the URL/DNS/SSRF review, including DNS-resolved private, loopback, and link-local address handling while preserving TLS hostname verification.
+5. Keep live YouTube/CDN retrieval, target Raspberry Pi MPD CURL-input compatibility, audible hardware output, and RAM-only/no-persistent-storage behavior as separate acceptance gates.
+
+No production binary installation or service restart without explicit user approval.
