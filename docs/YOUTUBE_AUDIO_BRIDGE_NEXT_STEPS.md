@@ -466,3 +466,5 @@ No production binary installation or service restart without explicit user appro
 - CI run `44123745133` is pending for this exact commit. The sanitizer workflow is also being validated; check the completed workflow's sanitizer configure, build, and test steps before requesting Raspberry Pi sanitizer execution.
 
 - Stress-test assertion was hardened in follow-up commit `c063439c`: the counter now records each attempted `activate()` call before the operation, so the test does not depend on a resolver winning a thread-scheduling race. CI for the corrected head remains pending.
+
+- Sanitizer CI baseline passed: run `44123520539` for commit `fd9a330f` completed successfully, including the full Debug ASan/UBSan CTest suite. The new bounded stress test and its deterministic counter correction are on later commits and remain subject to their own CI run.
