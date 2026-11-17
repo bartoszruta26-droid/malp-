@@ -1,129 +1,203 @@
 #!/usr/bin/env bash
-# One-shot verification, build, test and install entry point for Raspberry Pi.
-# Installs the Yoinks-MPD bootstrap binary and yt-dlp resolver only.
-# It NEVER installs, edits, restarts or sends commands to MPD.
-# Media remains HTTP-proxy-only; this script does not download media.
+# Build, test and install Yoinks-MPD as a restricted systemd service.
+# Does not install, edit, restart or send commands to MPD.
+# Audio is relayed over HTTP and held only in bounded RAM buffers.
 set -Eeuo pipefail
 umask 077
 
 readonly RELEASE="https://github.com/yt-dlp/yt-dlp/releases/latest/download"
 readonly BIN_DIR="/usr/local/bin"
-readonly YOINKS_BIN="${BIN_DIR}/yoinks-mpd"
-readonly YTDLP_BIN="${BIN_DIR}/yt-dlp"
-readonly TEST_VIDEO_URL="https://www.youtube.com/watch?v=qqAYW7uxErI"
-readonly TEST_VIDEO_ID="qqAYW7uxErI"
+readonly ETC_DIR="/etc/yoinks-mpd"
+readonly ENV_FILE="\${ETC_DIR}/yoinks-mpd.env"
+readonly UNIT_FILE="/etc/systemd/system/yoinks-mpd.service"
+readonly SERVICE_USER="yoinks-mpd"
+readonly SERVICE_GROUP="yoinks-mpd"
 
-fail() { printf 'yoinks-mpd-install: ERROR: %s\n' "$*" >&2; exit 1; }
-info() { printf 'yoinks-mpd-install: %s\n' "$*" >&2; }
+NO_START=0
+CHECK_YOUTUBE=0
+for arg in "$@"; do
+  case "$arg" in
+    --no-start) NO_START=1 ;;
+    --check-youtube) CHECK_YOUTUBE=1 ;;
+    -h|--help)
+      cat <<'USAGE'
+Użycie: sudo bash scripts/yoinks-mpd/install.sh [opcje]
+
+  --no-start       Zainstaluj i włącz jednostkę systemd, ale jej nie uruchamiaj.
+  --check-youtube  Wykonaj dodatkowy test pobrania samych metadanych YouTube.
+  -h, --help       Pokaż tę pomoc.
+
+Instalator kompiluje program, uruchamia CTest, weryfikuje SHA-256 yt-dlp,
+tworzy konto systemowe, zapisuje token i instaluje usługę systemd.
+Nie instaluje ani nie modyfikuje MPD, nie zmienia kolejki i nie pobiera audio.
+USAGE
+      exit 0
+      ;;
+    *) printf 'Nieznana opcja: %s\n' "$arg" >&2; exit 2 ;;
+  esac
+done
+
+fail() { printf 'yoinks-mpd-install: BŁĄD: %s\n' "$*" >&2; exit 1; }
+info() { printf 'yoinks-mpd: %s\n' "$*" >&2; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
-[[ ${EUID} -eq 0 ]] || fail "uruchom przez sudo: sudo bash scripts/yoinks-mpd/install.sh"
-have apt-get || fail "wymagany jest Debian/Raspberry Pi OS z APT"
+[[ \${EUID} -eq 0 ]] || fail "uruchom przez sudo: sudo bash scripts/yoinks-mpd/install.sh"
+have apt-get || fail "wymagany Debian/Raspberry Pi OS z APT"
 have sha256sum || fail "brak sha256sum"
+have systemctl || fail "brak systemctl; wymagany systemd"
+[[ -d /run/systemd/system ]] || fail "systemd nie jest aktywnym menedżerem usług"
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd -P)"
-SOURCE_DIR="${REPO_ROOT}/yoinks-mpd"
-[[ -f "${SOURCE_DIR}/CMakeLists.txt" ]] || fail "nie znaleziono yoinks-mpd/CMakeLists.txt; uruchom skrypt z checkoutu repozytorium"
+SCRIPT_DIR="$(cd -- "$(dirname -- "\${BASH_SOURCE[0]}")" && pwd -P)"
+REPO_ROOT="$(cd -- "\${SCRIPT_DIR}/../.." && pwd -P)"
+SOURCE_DIR="\${REPO_ROOT}/yoinks-mpd"
+SERVICE_SOURCE="\${SCRIPT_DIR}/yoinks-mpd.service"
+[[ -f "\${SOURCE_DIR}/CMakeLists.txt" ]] || fail "uruchom skrypt z checkoutu repozytorium"
+[[ -f "\${SERVICE_SOURCE}" ]] || fail "brak scripts/yoinks-mpd/yoinks-mpd.service"
 
 case "$(uname -m)" in
   aarch64|arm64) asset="yt-dlp_linux_aarch64"; archive=0 ;;
   armv7l|armv7*) asset="yt-dlp_linux_armv7l.zip"; archive=1 ;;
   x86_64|amd64) asset="yt-dlp_linux"; archive=0 ;;
-  *) fail "nieobsługiwana architektura CPU: $(uname -m); obsługiwane: aarch64, armv7l, x86_64" ;;
+  *) fail "nieobsługiwana architektura CPU: $(uname -m)" ;;
 esac
 
-tmp="$(mktemp -d "${TMPDIR:-/var/tmp}/yoinks-mpd-install.XXXXXXXX")"
-cleanup() { rm -rf -- "${tmp}"; }
+tmp="$(mktemp -d "\${TMPDIR:-/var/tmp}/yoinks-mpd-install.XXXXXXXX")"
+cleanup() { rm -rf -- "\${tmp}"; }
 trap cleanup EXIT INT TERM HUP
 
-info "krok 1/7: instalacja narzędzi kompilacji i bibliotek"
+info "1/8: instalacja zależności kompilacji"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y --no-install-recommends \
-  ca-certificates curl unzip cmake g++ make pkg-config \
+  ca-certificates curl unzip cmake g++ make pkg-config openssl \
   libboost-dev nlohmann-json3-dev libcurl4-openssl-dev
 
-for tool in cmake c++ ctest curl unzip install; do
-  have "$tool" || fail "brak wymaganego narzędzia po instalacji pakietów: $tool"
+for tool in cmake c++ ctest curl unzip install openssl getent; do
+  have "$tool" || fail "brak wymaganego narzędzia: $tool"
 done
 
-info "krok 2/7: konfiguracja CMake (C++17, Release, testy włączone)"
-cmake -S "${SOURCE_DIR}" -B "${tmp}/build" \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DYOINKS_MPD_BUILD_TESTS=ON
+info "2/8: konfiguracja i kompilacja C++17"
+cmake -S "\${SOURCE_DIR}" -B "\${tmp}/build" \
+  -DCMAKE_BUILD_TYPE=Release -DYOINKS_MPD_BUILD_TESTS=ON
+cmake --build "\${tmp}/build" --parallel 2
+[[ -x "\${tmp}/build/yoinks-mpd" ]] || fail "brak pliku wynikowego yoinks-mpd"
 
-info "krok 3/7: kompilacja z -Wall -Wextra -Wpedantic -Werror"
-cmake --build "${tmp}/build" --parallel 2
-[[ -x "${tmp}/build/yoinks-mpd" ]] || fail "kompilacja nie utworzyła pliku yoinks-mpd"
+info "3/8: pełny zestaw testów CTest"
+ctest --test-dir "\${tmp}/build" --output-on-failure
+info "CTest: wszystkie testy zaliczone"
 
-info "krok 4/7: uruchomienie pełnego zestawu CTest"
-ctest --test-dir "${tmp}/build" --output-on-failure
-info "wszystkie testy CTest zakończyły się powodzeniem"
-
-info "krok 5/7: pobranie oficjalnego yt-dlp i kontrola SHA-256"
-curl --fail --location --silent --show-error "${RELEASE}/${asset}" -o "${tmp}/${asset}"
-curl --fail --location --silent --show-error "${RELEASE}/SHA2-256SUMS" -o "${tmp}/SHA2-256SUMS"
-expected="$(awk -v n="${asset}" '$2 == n || $2 == "*"n {print $1; exit}' "${tmp}/SHA2-256SUMS")"
-[[ -n "${expected}" ]] || fail "brak wpisu SHA-256 dla ${asset} w upstreamowym SHA2-256SUMS"
-actual="$(sha256sum "${tmp}/${asset}" | awk '{print $1}')"
-[[ "${actual}" == "${expected}" ]] || fail "weryfikacja SHA-256 yt-dlp nie powiodła się"
+info "4/8: pobranie yt-dlp i weryfikacja sumy SHA-256"
+curl --fail --location --silent --show-error "\${RELEASE}/\${asset}" -o "\${tmp}/\${asset}"
+curl --fail --location --silent --show-error "\${RELEASE}/SHA2-256SUMS" -o "\${tmp}/SHA2-256SUMS"
+expected="$(awk -v n="\${asset}" '$2 == n || $2 == "*"n {print $1; exit}' "\${tmp}/SHA2-256SUMS")"
+[[ -n "\${expected}" ]] || fail "brak SHA-256 dla \${asset} w oficjalnym pliku sum"
+actual="$(sha256sum "\${tmp}/\${asset}" | awk '{print $1}')"
+[[ "\${actual}" == "\${expected}" ]] || fail "niezgodna suma SHA-256 yt-dlp"
 
 if (( archive )); then
-  unzip -q "${tmp}/${asset}" -d "${tmp}/yt-dlp-unpacked"
-  candidate="${tmp}/yt-dlp-unpacked/yt-dlp"
-  if [[ ! -f "${candidate}" ]]; then
-    candidate="$(find "${tmp}/yt-dlp-unpacked" -type f -name yt-dlp -print -quit)"
-  fi
+  unzip -q "\${tmp}/\${asset}" -d "\${tmp}/yt-dlp-unpacked"
+  candidate="$(find "\${tmp}/yt-dlp-unpacked" -type f -name yt-dlp -print -quit)"
 else
-  candidate="${tmp}/${asset}"
+  candidate="\${tmp}/\${asset}"
 fi
-[[ -n "${candidate:-}" && -f "${candidate}" ]] || fail "nie znaleziono wykonywalnego pliku yt-dlp"
-chmod 0755 "${candidate}"
-"${candidate}" --version >/dev/null || fail "kontrola wersji yt-dlp nie powiodła się"
+[[ -n "\${candidate:-}" && -f "\${candidate}" ]] || fail "nie znaleziono pliku yt-dlp"
+chmod 0755 "\${candidate}"
+"\${candidate}" --version >/dev/null
 
-info "krok 6/7: test online resolvera YouTube (wyłącznie metadane)"
-resolved_id="$("${candidate}" \
-  --ignore-config \
-  --no-cache-dir \
-  --no-playlist \
-  --skip-download \
-  --no-progress \
-  --no-warnings \
-  --socket-timeout 20 \
-  --retries 1 \
-  --extractor-retries 1 \
-  --print '%(id)s' \
-  "${TEST_VIDEO_URL}" 2>/dev/null)" || fail "yt-dlp nie zdołał odczytać metadanych filmu testowego; sprawdź łączność i dostępność filmu"
-[[ "${resolved_id}" == "${TEST_VIDEO_ID}" ]] || fail "resolver zwrócił inny identyfikator niż oczekiwany film testowy"
-info "resolver rozpoznał oczekiwany film: ${TEST_VIDEO_ID}; pobieranie audio było wyłączone"
+if (( CHECK_YOUTUBE )); then
+  info "opcjonalny test YouTube: tylko metadane, bez pobierania audio"
+  "\${candidate}" --ignore-config --no-cache-dir --no-playlist --skip-download \
+    --no-progress --no-warnings --socket-timeout 20 --retries 1 \
+    --extractor-retries 1 --print '%(id)s' \
+    "https://www.youtube.com/watch?v=qqAYW7uxErI" >/dev/null \
+    || fail "test metadanych YouTube nie powiódł się"
+fi
 
-info "krok 7/7: instalacja zweryfikowanych plików wykonywalnych"
-install -d -m 0755 "${BIN_DIR}"
-install -m 0755 "${tmp}/build/yoinks-mpd" "${BIN_DIR}/.yoinks-mpd.new"
-install -m 0755 "${candidate}" "${BIN_DIR}/.yt-dlp.new"
-mv -f -- "${BIN_DIR}/.yoinks-mpd.new" "${YOINKS_BIN}"
-mv -f -- "${BIN_DIR}/.yt-dlp.new" "${YTDLP_BIN}"
+info "5/8: przygotowanie dedykowanego konta systemowego"
+if ! getent group "\${SERVICE_GROUP}" >/dev/null; then
+  groupadd --system "\${SERVICE_GROUP}"
+fi
+if ! getent passwd "\${SERVICE_USER}" >/dev/null; then
+  useradd --system --gid "\${SERVICE_GROUP}" --home-dir /nonexistent \
+    --no-create-home --shell /usr/sbin/nologin "\${SERVICE_USER}"
+fi
+install -d -o root -g root -m 0755 "\${BIN_DIR}"
+install -d -o root -g root -m 0750 "\${ETC_DIR}"
 
-"${YTDLP_BIN}" --version >/dev/null || fail "zainstalowany yt-dlp nie przechodzi kontroli uruchomienia"
-[[ -x "${YOINKS_BIN}" ]] || fail "zainstalowany yoinks-mpd nie jest wykonywalny"
+info "6/8: bezpieczna konfiguracja tokenu"
+if [[ ! -f "\${ENV_FILE}" ]]; then
+  token="$(openssl rand -base64 48 | tr -d '\n=' | tr '+/' '-_')"
+  [[ "\${#token}" -ge 43 && "\${#token}" -le 128 ]] || fail "nie udało się wygenerować tokenu"
+  printf 'YOINKS_MPD_TOKEN=%s\n' "\${token}" > "\${tmp}/yoinks-mpd.env"
+  install -o root -g root -m 0600 "\${tmp}/yoinks-mpd.env" "\${ENV_FILE}"
+  unset token
+else
+  token_count="$(grep -c '^YOINKS_MPD_TOKEN=' "\${ENV_FILE}" || true)"
+  [[ "\${token_count}" == "1" ]] || fail "plik \${ENV_FILE} musi zawierać dokładnie jeden YOINKS_MPD_TOKEN"
+  token="$(sed -n 's/^YOINKS_MPD_TOKEN=//p' "\${ENV_FILE}")"
+  [[ "\${#token}" -ge 43 && "\${#token}" -le 128 ]] \
+    || fail "istniejący token ma nieprawidłową długość; zachowano plik konfiguracyjny"
+  if [[ ! "\${token}" =~ ^[A-Za-z0-9_-]+$ ]]; then
+    fail "istniejący token musi być zapisany w formacie base64url"
+  fi
+  unset token
+  chown root:root "\${ENV_FILE}"
+  chmod 0600 "\${ENV_FILE}"
+fi
 
-info "WYNIK: kompilacja, testy, instalacja i test metadanych zakończone powodzeniem"
-info "yoinks-mpd: ${YOINKS_BIN}"
-info "yt-dlp: ${YTDLP_BIN} (resolver metadanych/adresu źródłowego; bez pobierania mediów)"
+info "7/8: instalacja binariów i jednostki systemd"
+install -m 0755 "\${tmp}/build/yoinks-mpd" "\${BIN_DIR}/.yoinks-mpd.new"
+install -m 0755 "\${candidate}" "\${BIN_DIR}/.yt-dlp.new"
+mv -f -- "\${BIN_DIR}/.yoinks-mpd.new" "\${BIN_DIR}/yoinks-mpd"
+mv -f -- "\${BIN_DIR}/.yt-dlp.new" "\${BIN_DIR}/yt-dlp"
+install -o root -g root -m 0644 "\${SERVICE_SOURCE}" "\${tmp}/yoinks-mpd.service"
+install -o root -g root -m 0644 "\${tmp}/yoinks-mpd.service" "/etc/systemd/system/.yoinks-mpd.service.new"
+mv -f -- "/etc/systemd/system/.yoinks-mpd.service.new" "\${UNIT_FILE}"
+
+# The service reads only its root-owned EnvironmentFile. The application itself
+# runs without privileges and has no writable persistent media directory.
+systemctl daemon-reload
+systemctl enable yoinks-mpd.service
+
+if (( NO_START )); then
+  info "usługa została włączona, ale nie uruchomiona (--no-start)"
+else
+  systemctl restart yoinks-mpd.service
+  systemctl is-active --quiet yoinks-mpd.service \
+    || { systemctl --no-pager --full status yoinks-mpd.service >&2 || true; fail "usługa nie uruchomiła się poprawnie"; }
+fi
+
+info "8/8: kontrola zainstalowanych plików"
+"\${BIN_DIR}/yt-dlp" --version >/dev/null
+[[ -x "\${BIN_DIR}/yoinks-mpd" ]] || fail "brak wykonywalnego yoinks-mpd"
+[[ "$(stat -c '%a' "\${ENV_FILE}")" == "600" ]] || fail "nieprawidłowe uprawnienia pliku tokenu"
+
 if have mpd; then
-  info "wykryto MPD: $(mpd --version 2>/dev/null | head -n 1)"
-  if have systemctl && systemctl is-active --quiet mpd; then
-    info "usługa MPD jest aktywna; pozostawiono ją bez zmian"
-  elif have pgrep && pgrep -x mpd >/dev/null 2>&1; then
-    info "proces MPD działa; pozostawiono go bez zmian"
-  else
-    info "MPD jest zainstalowany, ale stan aktywności usługi nie został potwierdzony"
-  fi
+  info "wykryto MPD ($(mpd --version 2>/dev/null | head -n 1)); pozostawiono bez zmian"
 else
-  info "nie wykryto polecenia mpd; nie instalowano MPD"
+  info "MPD nie jest zainstalowany; instalator go nie doinstalowuje"
 fi
 
-info "UWAGA: instalator kompiluje i testuje komponenty oraz instaluje binaria, ale nie tworzy usługi systemd ani nie konfiguruje MPD. Integracja HTTP → resolver → lazy sessions → kolejka MPD jest w kodzie; zgodność MPD/CURL i odtwarzanie end-to-end wymagają osobnego testu na docelowym Raspberry Pi."
-info "Skrypt nie tworzy ani nie uruchamia usługi systemd, nie zmienia konfiguracji MPD, nie czyści kolejki i nie zapisuje mediów na dysku."
-info "Transport mediów pozostaje wyłącznie HTTP proxy; żadne FIFO, potoki nazwane ani pliki audio nie są używane."
+cat <<'DONE'
+Instalacja Yoinks-MPD zakończona.
+
+Usługa:       yoinks-mpd.service
+API lokalne:  http://127.0.0.1:8788
+Konfiguracja: /etc/yoinks-mpd/yoinks-mpd.env (root:root, 0600)
+Logi:         journalctl -u yoinks-mpd.service
+
+Aby odczytać token do skonfigurowania klienta MALP:
+  sudo cat /etc/yoinks-mpd/yoinks-mpd.env
+
+Kontrola stanu:
+  systemctl status yoinks-mpd.service
+  curl -fsS http://127.0.0.1:8788/api/v1/health
+
+WAŻNE:
+- MPD nie został zainstalowany, skonfigurowany ani zrestartowany.
+- Nie zmieniono kolejki ani trybów MPD.
+- Nie wykonano testu odtwarzania i nie potwierdzono zgodności MPD/CURL.
+- API nasłuchuje wyłącznie na loopback; zdalny dostęp wymaga osobno
+  skonfigurowanego i sprawdzonego TLS reverse proxy.
+- Audio jest przesyłane przez HTTP proxy i buforowane wyłącznie w RAM.
+DONE
