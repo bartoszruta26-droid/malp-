@@ -21,6 +21,7 @@ void testRegistrationDoesNotResolveOrStartMedia() {
     const auto id = registry.create("qqAYW7uxErI");
     require(id.size() == 32, "valid video ID should receive opaque session capability");
     require(registry.size() == 1 && registry.activeCount() == 0, "registration must remain lazy");
+    require(registry.contains(id) && !registry.isFailed(id), "registered session must be discoverable and healthy");
     require(!registry.findActive(id), "registered session must not contain an active upstream");
     require(calls.load() == 0, "registration must not invoke resolver");
 }
@@ -45,6 +46,8 @@ void testActivationResolvesOnlyOnDemandAndRejectsUntrustedUrl() {
     require(calls == 1, "resolver should run exactly when activation is requested");
     require(registry.activeCount() == 0 && !registry.findActive(id),
             "failed activation must not retain an active stream");
+    require(registry.contains(id) && registry.isFailed(id),
+            "resolver failure must remain distinguishable from an unknown session");
 }
 
 void testConcurrentActivationIsSingleFlight() {
@@ -88,6 +91,8 @@ void testEraseCancelsResolverInFlight() {
             "erase must signal cancellation to the in-flight resolver");
     require(registry.size() == 0 && registry.activeCount() == 0,
             "cancelled resolver must not recreate an erased session");
+    require(!registry.contains(id) && !registry.isFailed(id),
+            "erased sessions must no longer be discoverable");
 }
 void testSessionAndBufferLimitsAreValidated() {
     yoinks::LazyStreamSessionRegistryConfig config;
