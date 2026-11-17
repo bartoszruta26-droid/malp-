@@ -35,7 +35,7 @@ void testActivationResolvesOnlyOnDemandAndRejectsUntrustedUrl() {
     yoinks::LazyStreamSessionRegistry registry;
     const auto id = registry.create("qqAYW7uxErI");
     unsigned calls = 0;
-    const bool activated = registry.activate(id, [&](const std::string& video_id, std::string& url) {
+    const bool activated = registry.activate(id, [&](const std::string& video_id, std::string& url, const std::atomic_bool*) {
         ++calls;
         require(video_id == "qqAYW7uxErI", "resolver receives only stored video ID");
         url = "https://attacker.example/audio";
@@ -51,7 +51,7 @@ void testConcurrentActivationIsSingleFlight() {
     yoinks::LazyStreamSessionRegistry registry;
     const auto id = registry.create("qqAYW7uxErI");
     std::atomic<unsigned> calls{0};
-    auto resolver = [&](const std::string&, std::string& url) {
+    auto resolver = [&](const std::string&, std::string& url, const std::atomic_bool*) {
         ++calls;
         std::this_thread::sleep_for(std::chrono::milliseconds(30));
         url = "https://attacker.example/audio";
@@ -66,6 +66,29 @@ void testConcurrentActivationIsSingleFlight() {
     require(calls.load() == 1, "concurrent GETs must not duplicate resolver work");
 }
 
+
+void testEraseCancelsResolverInFlight() {
+    yoinks::LazyStreamSessionRegistry registry;
+    const auto id = registry.create("qqAYW7uxErI");
+    std::atomic<bool> resolver_entered{false};
+    std::atomic<bool> resolver_observed_cancel{false};
+    bool activated = true;
+    std::thread worker([&] {
+        activated = registry.activate(id, [&](const std::string&, std::string&, const std::atomic_bool* cancellation) {
+            resolver_entered.store(true);
+            while (!cancellation->load()) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            resolver_observed_cancel.store(true);
+            return false;
+        });
+    });
+    while (!resolver_entered.load()) std::this_thread::yield();
+    require(registry.erase(id), "erase should remove an activating session");
+    worker.join();
+    require(!activated && resolver_observed_cancel.load(),
+            "erase must signal cancellation to the in-flight resolver");
+    require(registry.size() == 0 && registry.activeCount() == 0,
+            "cancelled resolver must not recreate an erased session");
+}
 void testSessionAndBufferLimitsAreValidated() {
     yoinks::LazyStreamSessionRegistryConfig config;
     config.maximum_active_streams = 2;
@@ -86,6 +109,7 @@ int main() {
         testInvalidVideoIdsAreRejected();
         testActivationResolvesOnlyOnDemandAndRejectsUntrustedUrl();
         testConcurrentActivationIsSingleFlight();
+        testEraseCancelsResolverInFlight();
         testSessionAndBufferLimitsAreValidated();
         std::cout << "All lazy stream session tests passed\n";
         return 0;
