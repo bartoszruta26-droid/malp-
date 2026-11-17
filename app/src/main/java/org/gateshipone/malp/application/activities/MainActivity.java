@@ -321,16 +321,13 @@ public class MainActivity extends GenericActivity
         YOUTUBE_BRIDGE_EXECUTOR.execute(() -> {
             try {
                 YouTubeAudioBridgeClient.Result result =
-                        new YouTubeAudioBridgeClient(baseUrl, token).resolve(url, mode);
-                int count = result.items.size();
+                        new YouTubeAudioBridgeClient(baseUrl, token).queue(url, mode);
                 runOnUiThread(() -> {
                     if (isFinishing() || isDestroyed()) return;
-                    // The bridge currently returns stable stream URIs but MPD queue
-                    // insertion is deliberately deferred until the Pi API contract
-                    // and MPD-compatible input transport are implemented together.
-                    Snackbar.make(findViewById(R.id.drawer_layout),
-                            getString(R.string.youtube_bridge_error,
-                                    "Most zwrócił " + count + " pozycji, ale wstawianie do kolejki nie jest jeszcze dostępne."),
+                    String message = result.started
+                            ? "Rozpoczęto odtwarzanie; dodano " + result.queued + " pozycji."
+                            : "Dodano do kolejki " + result.queued + " pozycji.";
+                    Snackbar.make(findViewById(R.id.drawer_layout), message,
                             Snackbar.LENGTH_LONG).show();
                 });
             } catch (Exception error) {
