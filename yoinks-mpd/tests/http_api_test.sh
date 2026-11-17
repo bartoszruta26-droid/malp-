@@ -83,7 +83,7 @@ test_video_status="$(curl --silent -o /dev/null -w '%{http_code}' \
     -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
     -d '{"url":"https://www.youtube.com/watch?v=qqAYW7uxErI","mode":"enqueue"}' \
     "http://127.0.0.1:$port/api/v1/queue")"
-[[ "$test_video_status" == "502" ]]
+[[ "$test_video_status" == "503" ]]
 
 large_body="$(printf '%*s' 17000 '' | tr ' ' 'a')"
 large_status="$(curl --silent -o /dev/null -w '%{http_code}' \
