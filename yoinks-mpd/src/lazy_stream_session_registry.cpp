@@ -22,7 +22,22 @@ LazyStreamSessionRegistry::LazyStreamSessionRegistry(LazyStreamSessionRegistryCo
     }
 }
 
-LazyStreamSessionRegistry::~LazyStreamSessionRegistry() { clear(); }
+LazyStreamSessionRegistry::~LazyStreamSessionRegistry() { shutdown(); }
+
+LazyStreamSessionRegistry::ActivationOperationGuard::ActivationOperationGuard(
+        LazyStreamSessionRegistry* registry) noexcept : owner(registry) {}
+
+LazyStreamSessionRegistry::ActivationOperationGuard::~ActivationOperationGuard() {
+    if (owner != nullptr) owner->finishActivationOperation();
+}
+
+void LazyStreamSessionRegistry::finishActivationOperation() noexcept {
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (active_activations_ > 0) --active_activations_;
+    }
+    shutdown_condition_.notify_all();
+}
 
 bool LazyStreamSessionRegistry::validVideoId(const std::string& id) noexcept {
     if (id.size() != 11) return false;
@@ -51,7 +66,7 @@ std::string LazyStreamSessionRegistry::generateId() {
 std::string LazyStreamSessionRegistry::create(const std::string& video_id) {
     if (!validVideoId(video_id)) return {};
     std::lock_guard<std::mutex> lock(mutex_);
-    if (sessions_.size() >= config_.maximum_sessions) return {};
+    if (shutting_down_ || sessions_.size() >= config_.maximum_sessions) return {};
     for (unsigned attempt = 0; attempt < 4; ++attempt) {
         const auto id = generateId();
         if (sessions_.emplace(id, Entry{video_id, nullptr, false, false, false, false, std::make_shared<std::atomic_bool>(false)}).second) return id;
@@ -60,13 +75,21 @@ std::string LazyStreamSessionRegistry::create(const std::string& video_id) {
 }
 
 bool LazyStreamSessionRegistry::activate(const std::string& id, const ResolveAudioUrl& resolver) {
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (shutting_down_) return false;
+        ++active_activations_;
+    }
+    ActivationOperationGuard operation_guard(this);
+
     std::string video_id;
     std::shared_ptr<std::atomic_bool> cancellation;
     std::shared_ptr<HttpUpstreamStream> previous;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         const auto found = sessions_.find(id);
-        if (found == sessions_.end() || found->second.activating || found->second.serving) return false;
+        if (shutting_down_ || found == sessions_.end()
+                || found->second.activating || found->second.serving) return false;
 
         // A previous release(cancel_upstream=true) may have cancelled an
         // in-flight resolver. Give a later, explicit retry a fresh token.
@@ -133,7 +156,7 @@ bool LazyStreamSessionRegistry::activate(const std::string& id, const ResolveAud
     {
         std::lock_guard<std::mutex> lock(mutex_);
         const auto found = sessions_.find(id);
-        if (found == sessions_.end() || cancellation->load()) {
+        if (shutting_down_ || found == sessions_.end() || cancellation->load()) {
             discard_stream = true;
         } else {
             found->second.stream = stream;
@@ -179,6 +202,33 @@ bool LazyStreamSessionRegistry::erase(const std::string& id) {
     }
     if (stream) { stream->cancel(); stream->wait(); }
     return true;
+}
+
+void LazyStreamSessionRegistry::shutdown() {
+    {
+        std::unique_lock<std::mutex> lock(mutex_);
+        if (shutdown_complete_) return;
+        if (shutting_down_) {
+            shutdown_condition_.wait(lock, [this] { return shutdown_complete_; });
+            return;
+        }
+        shutting_down_ = true;
+        for (auto& item : sessions_) {
+            if (item.second.cancellation) item.second.cancellation->store(true);
+        }
+    }
+
+    // clear() cancels and joins already-published upstream workers. An
+    // unpublished worker is owned by its activate() call, which observes the
+    // cancellation token, discards/joins that worker, and releases its guard.
+    clear();
+
+    {
+        std::unique_lock<std::mutex> lock(mutex_);
+        shutdown_condition_.wait(lock, [this] { return active_activations_ == 0; });
+        shutdown_complete_ = true;
+    }
+    shutdown_condition_.notify_all();
 }
 
 void LazyStreamSessionRegistry::clear() {
