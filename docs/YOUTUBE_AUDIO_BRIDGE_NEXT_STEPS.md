@@ -15,15 +15,9 @@ Finish the existing `feature/youtube-audio-bridge` implementation so MALP can sh
 - The Android HTTP client expects `POST /api/v1/resolve`, but the Raspberry Pi installation currently installs only the FIFO producer script. No matching HTTP API service is present.
 - Playlist expansion, authenticated request handling, MPD queue insertion, cancellation coordination, and successful end-to-end playback remain unimplemented/unverified.
 
-## Important MPD compatibility gate
+## MPD CURL compatibility gate
 
-MPD's documented `pipe` and `fifo` plugins are output plugins (PCM output), not generic input sources. Do not assume a named FIFO can be added as a local MPD song. First test the exact MPD version/build on the target Raspberry Pi.
-
-If FIFO input is not supported, stop and make an explicit architecture decision:
-1. implement and maintain a compatible native C++ MPD input plugin, or
-2. use a local streaming HTTP endpoint through MPD's documented CURL input plugin.
-
-Do not silently switch to HTTP while claiming the requested FIFO architecture.
+The selected target architecture is a local C++ HTTP relay consumed by MPD's CURL input plugin. MPD's documented pipe and fifo plugins are output plugins, not generic input sources; the existing FIFO producer is retained only as a prototype. Before implementing the relay, verify the exact MPD build on the target Raspberry Pi and demonstrate playback of a known-good HTTP audio URI without changing the production queue. Use scripts/yoinks-mpd/diagnose-mpd-http.sh and docs/yoinks-mpd/MPD_HTTP_INPUT_DIAGNOSTIC.md. If CURL input is absent, stop and decide explicitly whether to rebuild MPD with CURL support or implement a native C++ input plugin.
 
 ## Requirements for the implementation
 
