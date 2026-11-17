@@ -55,18 +55,6 @@ public final class YouTubeBridgePreferences {
         String ciphertextValue = secure.getString(CIPHERTEXT, null);
         if (wrapped == null || ivValue == null || ciphertextValue == null) return "";
 
-        String trimmedToken = token.trim();
-        if (trimmedToken.length() < 43 || trimmedToken.length() > 128) {
-            throw new IllegalArgumentException("Bridge token must be 43-128 base64url characters");
-        }
-        for (int i = 0; i < trimmedToken.length(); i++) {
-            char c = trimmedToken.charAt(i);
-            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
-                    || (c >= '0' && c <= '9') || c == '_' || c == '-')) {
-                throw new IllegalArgumentException("Bridge token contains invalid characters");
-            }
-        }
-
         try {
             KeyStore keyStore = loadKeyStore();
             if (!keyStore.containsAlias(KEY_ALIAS)) return "";
