@@ -172,6 +172,81 @@ void testReleaseCancelsInFlightActivationAndAllowsFreshRetry() {
             "a later explicit retry must receive a fresh, uncancelled token");
 }
 
+void testReleaseDuringStartedButUnpublishedStreamFreesReservation() {
+    std::mutex mutex;
+    std::condition_variable condition;
+    bool after_start_entered = false;
+    bool allow_publication_check = false;
+    bool pause_once = true;
+
+    yoinks::LazyStreamSessionRegistryConfig config;
+    config.upstream.connect_timeout_seconds = 1;
+    config.upstream.test_connect_to_for_tests =
+            "rr1.googlevideo.com:443:127.0.0.1:1";
+    config.after_upstream_start_for_tests = [&] {
+        std::unique_lock<std::mutex> lock(mutex);
+        if (!pause_once) return;
+        pause_once = false;
+        after_start_entered = true;
+        condition.notify_all();
+        condition.wait(lock, [&] { return allow_publication_check; });
+    };
+    yoinks::LazyStreamSessionRegistry registry(config);
+    const auto id = registry.create("qqAYW7uxErI");
+    bool activated = true;
+
+    std::thread worker([&] {
+        activated = registry.activate(id,
+            [](const std::string&, std::string& url, const std::atomic_bool*) {
+                url = "https://rr1.googlevideo.com/audio.bin";
+                return true;
+            });
+    });
+
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        condition.wait(lock, [&] { return after_start_entered; });
+    }
+
+    require(registry.contains(id) && registry.activeCount() == 1
+                    && !registry.findActive(id),
+            "started upstream must retain its activation reservation until publication");
+
+    require(registry.release(id, true),
+            "release must cancel an upstream that has started but is not yet published");
+
+    const bool overlapping_activation = registry.activate(
+        id, [](const std::string&, std::string&, const std::atomic_bool*) {
+            return false;
+        });
+    require(!overlapping_activation,
+            "a started but unpublished upstream must continue to own the activation slot");
+
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        allow_publication_check = true;
+    }
+    condition.notify_all();
+    worker.join();
+
+    require(!activated && registry.contains(id) && !registry.findActive(id),
+            "cancelled unpublished upstream must be discarded without deleting its capability");
+    require(registry.activeCount() == 0 && !registry.isFailed(id),
+            "discarding the cancelled upstream must release the reservation without marking failure");
+
+    const bool retried = registry.activate(id,
+        [](const std::string&, std::string& url, const std::atomic_bool*) {
+            url = "https://rr1.googlevideo.com/audio.bin";
+            return true;
+        });
+    require(retried,
+            "a later explicit activation must succeed after the discarded worker has been joined");
+    require(registry.release(id, true),
+            "the retry stream must remain releasable for deterministic test cleanup");
+    require(registry.activeCount() == 0,
+            "cleanup after retry must leave no active stream reservation");
+}
+
 void testRetainOnlyPreservesInFlightActivation() {
     yoinks::LazyStreamSessionRegistry registry;
     const auto id = registry.create("qqAYW7uxErI");
@@ -257,6 +332,7 @@ int main() {
         testConcurrentActivationIsSingleFlight();
         testEraseCancelsResolverInFlight();
         testReleaseCancelsInFlightActivationAndAllowsFreshRetry();
+        testReleaseDuringStartedButUnpublishedStreamFreesReservation();
         testRetainOnlyPreservesInFlightActivation();
         testReleaseRetainsQueuedCapabilityForReplay();
         testRetainOnlyPrunesSessionsRemovedFromMpdQueue();
