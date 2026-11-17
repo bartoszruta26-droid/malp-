@@ -247,6 +247,101 @@ void testReleaseDuringStartedButUnpublishedStreamFreesReservation() {
             "cleanup after retry must leave no active stream reservation");
 }
 
+void testEraseDuringStartedButUnpublishedStreamDoesNotRecreateSession() {
+    std::mutex mutex;
+    std::condition_variable condition;
+    bool after_start_entered = false;
+    bool allow_discard = false;
+
+    yoinks::LazyStreamSessionRegistryConfig config;
+    config.upstream.connect_timeout_seconds = 1;
+    config.upstream.test_connect_to_for_tests =
+            "rr1.googlevideo.com:443:127.0.0.1:1";
+    config.after_upstream_start_for_tests = [&] {
+        std::unique_lock<std::mutex> lock(mutex);
+        after_start_entered = true;
+        condition.notify_all();
+        condition.wait(lock, [&] { return allow_discard; });
+    };
+    yoinks::LazyStreamSessionRegistry registry(config);
+    const auto id = registry.create("qqAYW7uxErI");
+    bool activated = true;
+
+    std::thread worker([&] {
+        activated = registry.activate(id,
+            [](const std::string&, std::string& url, const std::atomic_bool*) {
+                url = "https://rr1.googlevideo.com/audio.bin";
+                return true;
+            });
+    });
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        condition.wait(lock, [&] { return after_start_entered; });
+    }
+
+    require(registry.erase(id),
+            "erase must remove a session whose upstream has started but is unpublished");
+    require(!registry.contains(id) && registry.activeCount() == 0,
+            "erase must immediately remove the unpublished session reservation");
+
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        allow_discard = true;
+    }
+    condition.notify_all();
+    worker.join();
+
+    require(!activated && registry.size() == 0 && registry.activeCount() == 0,
+            "the cancelled unpublished activation must finish without recreating an erased session");
+}
+
+void testClearDuringStartedButUnpublishedStreamDoesNotRecreateSession() {
+    std::mutex mutex;
+    std::condition_variable condition;
+    bool after_start_entered = false;
+    bool allow_discard = false;
+
+    yoinks::LazyStreamSessionRegistryConfig config;
+    config.upstream.connect_timeout_seconds = 1;
+    config.upstream.test_connect_to_for_tests =
+            "rr1.googlevideo.com:443:127.0.0.1:1";
+    config.after_upstream_start_for_tests = [&] {
+        std::unique_lock<std::mutex> lock(mutex);
+        after_start_entered = true;
+        condition.notify_all();
+        condition.wait(lock, [&] { return allow_discard; });
+    };
+    yoinks::LazyStreamSessionRegistry registry(config);
+    const auto id = registry.create("qqAYW7uxErI");
+    bool activated = true;
+
+    std::thread worker([&] {
+        activated = registry.activate(id,
+            [](const std::string&, std::string& url, const std::atomic_bool*) {
+                url = "https://rr1.googlevideo.com/audio.bin";
+                return true;
+            });
+    });
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        condition.wait(lock, [&] { return after_start_entered; });
+    }
+
+    registry.clear();
+    require(registry.size() == 0 && registry.activeCount() == 0,
+            "clear must remove the session whose upstream has started but is unpublished");
+
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        allow_discard = true;
+    }
+    condition.notify_all();
+    worker.join();
+
+    require(!activated && registry.size() == 0 && registry.activeCount() == 0,
+            "the cancelled unpublished activation must finish without recreating a cleared session");
+}
+
 void testRetainOnlyPreservesInFlightActivation() {
     yoinks::LazyStreamSessionRegistry registry;
     const auto id = registry.create("qqAYW7uxErI");
@@ -333,6 +428,8 @@ int main() {
         testEraseCancelsResolverInFlight();
         testReleaseCancelsInFlightActivationAndAllowsFreshRetry();
         testReleaseDuringStartedButUnpublishedStreamFreesReservation();
+        testEraseDuringStartedButUnpublishedStreamDoesNotRecreateSession();
+        testClearDuringStartedButUnpublishedStreamDoesNotRecreateSession();
         testRetainOnlyPreservesInFlightActivation();
         testReleaseRetainsQueuedCapabilityForReplay();
         testRetainOnlyPrunesSessionsRemovedFromMpdQueue();
