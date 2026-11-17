@@ -26,7 +26,7 @@ trap 'status=$?; echo "Real MPD integration failed at line $LINENO: $BASH_COMMAN
 openssl req -x509 -newkey rsa:2048 -nodes -keyout "$tmp/key.pem" -out "$tmp/cert.pem" -days 1 -subj "/CN=rr1.googlevideo.com" -addext "subjectAltName=DNS:rr1.googlevideo.com" -addext "basicConstraints=critical,CA:TRUE" >/dev/null 2>&1
 
 # A valid 10-second, mono, 8 kHz, 16-bit PCM WAV; silence is sufficient for a null output.
-printf '%b' 'RIFF\304\217\002\000WAVEfmt \020\000\000\000\001\000\001\000\100\037\000\000\200\076\000\000\002\000\020\000data\240\217\002\000' >"$tmp/audio.wav"
+printf '%b' 'RIFF\044\161\002\000WAVEfmt \020\000\000\000\001\000\001\000\100\037\000\000\200\076\000\000\002\000\020\000data\000\161\002\000' >"$tmp/audio.wav"
 dd if=/dev/zero bs=1 count=160000 >>"$tmp/audio.wav" 2>/dev/null
 
 cat >"$tmp/yt-dlp-fixture" <<'RESOLVER'
