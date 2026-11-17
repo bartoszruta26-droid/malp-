@@ -186,6 +186,7 @@ bool LazyStreamSessionRegistry::release(const std::string& id, bool cancel_upstr
         found->second.serving = false;
         if (cancel_upstream) {
             found->second.refresh_required = true;
+            found->second.activating = true;  // reserve the slot until cancellation is joined
             stream = std::move(found->second.stream);
         } else if (found->second.stream
                 && found->second.stream->state() != UpstreamState::running) {
@@ -197,6 +198,11 @@ bool LazyStreamSessionRegistry::release(const std::string& id, bool cancel_upstr
     if (stream) {
         if (cancel_upstream) stream->cancel();
         stream->wait();
+    }
+    if (cancel_upstream) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        const auto found = sessions_.find(id);
+        if (found != sessions_.end()) found->second.activating = false;
     }
     return true;
 }
