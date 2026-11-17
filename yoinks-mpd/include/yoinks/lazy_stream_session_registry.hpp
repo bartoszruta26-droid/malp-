@@ -7,6 +7,7 @@
 #include "yoinks/http_upstream_stream.hpp"
 #include <atomic>
 #include <cstddef>
+#include <condition_variable>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -49,6 +50,10 @@ public:
     std::size_t retainOnly(const std::unordered_set<std::string>& live_ids);
     bool erase(const std::string& id);
     void clear();
+    // Stops new create/activate operations, cancels sessions, and waits for all
+    // in-flight activate() calls to leave before the owner destroys this object.
+    // The owner must stop dispatching other public calls before invoking shutdown().
+    void shutdown();
     std::size_t size() const;
     std::size_t activeCount() const;
 
@@ -64,8 +69,18 @@ private:
     };
     static std::string generateId();
     static bool validVideoId(const std::string& video_id) noexcept;
+    struct ActivationOperationGuard {
+        explicit ActivationOperationGuard(LazyStreamSessionRegistry* owner) noexcept;
+        ~ActivationOperationGuard();
+        LazyStreamSessionRegistry* owner;
+    };
+    void finishActivationOperation() noexcept;
     LazyStreamSessionRegistryConfig config_;
     mutable std::mutex mutex_;
+    std::condition_variable shutdown_condition_;
+    std::size_t active_activations_{0};
+    bool shutting_down_{false};
+    bool shutdown_complete_{false};
     std::unordered_map<std::string, Entry> sessions_;
 };
 
