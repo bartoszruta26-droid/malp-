@@ -67,4 +67,33 @@ public class YouTubeShareParserTest {
         assertFalse(YouTubeShareParser.isYouTubeUrl(
                 "https://www.youtube.com/shorts/dQw4w9WgXcQ/extra"));
     }
+    @Test public void extractsMultipleDistinctUrlsInEncounterOrder() {
+        List<String> urls = YouTubeShareParser.extractYouTubeUrls(
+                "First https://youtu.be/dQw4w9WgXcQ then "
+                        + "https://www.youtube.com/watch?v=abcdefghijk and "
+                        + "https://youtu.be/dQw4w9WgXcQ");
+        assertEquals(2, urls.size());
+        assertEquals("https://youtu.be/dQw4w9WgXcQ", urls.get(0));
+        assertTrue(urls.get(1).contains("watch?v=abcdefghijk"));
+    }
+
+    @Test public void ignoresInvalidLinksAmongValidSharedLinks() {
+        List<String> urls = YouTubeShareParser.extractYouTubeUrls(
+                "https://example.com/video https://youtu.be/dQw4w9WgXcQ");
+        assertEquals(1, urls.size());
+        assertEquals("https://youtu.be/dQw4w9WgXcQ", urls.get(0));
+    }
+
+    @Test public void emptyAndNullShareTextReturnNoUrls() {
+        assertTrue(YouTubeShareParser.extractYouTubeUrls(null).isEmpty());
+        assertTrue(YouTubeShareParser.extractYouTubeUrls("").isEmpty());
+    }
+
+    @Test public void rejectsUserInfoAndNonStandardPorts() {
+        assertFalse(YouTubeShareParser.isYouTubeUrl(
+                "https://user@youtube.com/watch?v=dQw4w9WgXcQ"));
+        assertFalse(YouTubeShareParser.isYouTubeUrl(
+                "https://youtube.com:8443/watch?v=dQw4w9WgXcQ"));
+    }
+
 }
