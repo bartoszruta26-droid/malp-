@@ -29,8 +29,6 @@
 #include <stdexcept>
 #include <utility>
 
-extern char** environ;
-
 namespace yoinks {
 namespace {
 
@@ -154,9 +152,15 @@ ProcessResult runBoundedProcess(const std::string& executable,
 
     pid_t child = -1;
     int spawn_error = setup_error;
+    // Do not pass the service environment (which contains the API bearer
+    // token) to the yt-dlp child process. The resolver needs only a predictable
+    // executable search path and locale; yt-dlp itself is invoked by absolute path.
+    char path_environment[] = "PATH=/usr/bin:/bin";
+    char locale_environment[] = "LANG=C.UTF-8";
+    char* child_environment[] = {path_environment, locale_environment, nullptr};
     if (spawn_error == 0) {
         spawn_error = posix_spawn(&child, executable.c_str(), &actions, &attributes,
-                                  argv.data(), environ);
+                                  argv.data(), child_environment);
     }
     posix_spawnattr_destroy(&attributes);
     posix_spawn_file_actions_destroy(&actions);
