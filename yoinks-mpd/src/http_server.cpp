@@ -9,6 +9,7 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <array>
 #include <chrono>
 #include <cctype>
@@ -185,6 +186,18 @@ http::response<http::string_body> handle(
             request.version());
 }
 
+void rejectBusy(tcp::socket socket) {
+    beast::tcp_stream stream{std::move(socket)};
+    stream.expires_after(std::chrono::seconds(1));
+    auto reply = response(http::status::service_unavailable,
+            R"({"success":false,"error":{"code":"server_busy","message":"Server capacity reached"}})",
+            11);
+    beast::error_code error;
+    http::write(stream, reply, error);
+    stream.socket().shutdown(tcp::socket::shutdown_both, error);
+    stream.socket().close(error);
+}
+
 void serveConnection(tcp::socket socket, const std::string& token) {
     beast::tcp_stream stream{std::move(socket)};
     stream.expires_after(std::chrono::seconds(10));
@@ -227,13 +240,32 @@ HttpServer::HttpServer(HttpServerConfig config) : config_(std::move(config)) {
 }
 
 void HttpServer::run() {
+    constexpr std::size_t kWorkerCount = 4;
+    constexpr std::size_t kMaximumActiveConnections = 16;
     asio::io_context context{1};
+    asio::thread_pool workers{kWorkerCount};
+    auto active_connections = std::make_shared<std::atomic<std::size_t>>(0);
     const auto address = asio::ip::make_address(config_.bind_address);
     tcp::acceptor acceptor{context, tcp::endpoint{address, config_.port}};
     for (;;) {
         tcp::socket socket{context};
         acceptor.accept(socket);
-        serveConnection(std::move(socket), config_.bearer_token);
+        const std::size_t previous = active_connections->fetch_add(1);
+        if (previous >= kMaximumActiveConnections) {
+            active_connections->fetch_sub(1);
+            rejectBusy(std::move(socket));
+            continue;
+        }
+        asio::post(workers, [socket = std::move(socket),
+                             token = config_.bearer_token,
+                             active_connections]() mutable {
+            try {
+                serveConnection(std::move(socket), token);
+            } catch (...) {
+                // A malformed client must not terminate a worker or expose details.
+            }
+            active_connections->fetch_sub(1);
+        });
     }
 }
 
