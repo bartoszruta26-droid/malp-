@@ -21,7 +21,7 @@ This directory is the working area for implementation, audits, test evidence, an
 
 ## Main audit\n\n- [Professional architecture audit and implementation plan](AUDYT_ARCHITEKTURY_I_PLAN_REALIZACJI.md) — current-state findings, target architecture, security, RAM-only controls, acceptance tests, risks, and staged delivery plan.\n\n## Work stages
 
-- [x] W0 — Align documentation on the selected HTTP relay architecture; FIFO is explicitly prototype-only.
+- [x] W0 — Confirm HTTP proxy as the sole transport; remove named-pipe producer and tests.
 - [ ] W1 — Verify CURL input and real HTTP playback on the exact Raspberry Pi MPD build (hardware evidence pending).
 - [ ] W2 — Define the authenticated API contract and security limits.
 - [ ] W3 — Build the Raspberry Pi C++ service skeleton.
@@ -45,8 +45,8 @@ Repository-side inspection is not a substitute for compiling or running the serv
 
 ## Current known risks
 
-- The Android client previously expected `POST /api/v1/resolve`, while the Pi installer supplied only a FIFO prototype.
-- MPD FIFO/pipe plugins are output plugins; do not assume arbitrary FIFO input is supported.
+- The Android client expects `POST /api/v1/resolve`, but the Pi installer previously supplied only an unrelated producer prototype. The producer has now been removed; the HTTP service remains to be implemented.
+- The bridge media transport is HTTP proxy only; do not add pipe, named-pipe, local-file or file-cache paths.
 - The agreed architecture uses a local HTTP streaming endpoint and requires MPD CURL input support on the exact target build.
 - The existing Android share path was previously incomplete; re-audit current source before editing.
 - yt-dlp must be invoked for metadata/URL resolution only, with cache disabled; never invoke media download or file-writing postprocessors.
@@ -54,7 +54,7 @@ Repository-side inspection is not a substitute for compiling or running the serv
 
 ## Latest work (2026-11-17)
 
-- W0 documentation alignment completed: HTTP relay + MPD CURL input is the selected target; FIFO is explicitly prototype-only.
+- W0 correction completed: HTTP proxy + MPD CURL input is the sole target; the legacy named-pipe producer and tests were removed.
 - Added a read-only Raspberry Pi diagnostic: `scripts/yoinks-mpd/diagnose-mpd-http.sh`.
 - Added the procedure: `docs/yoinks-mpd/MPD_HTTP_INPUT_DIAGNOSTIC.md`.
 - W1 remains **blocked pending target-device evidence**. The diagnostic script has not been run on the Raspberry Pi in this environment, and no successful HTTP playback is claimed.
