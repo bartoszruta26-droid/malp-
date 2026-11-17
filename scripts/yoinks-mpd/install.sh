@@ -1,57 +1,111 @@
 #!/usr/bin/env bash
-# Install yt-dlp as a metadata/source resolver dependency for the HTTP proxy.
-# This script does not install or configure the proxy service or alter MPD.
+# One-shot verification, build, test and install entry point for Raspberry Pi.
+# Installs the Yoinks-MPD bootstrap binary and yt-dlp resolver only.
+# It NEVER installs, edits, restarts or sends commands to MPD.
+# Media remains HTTP-proxy-only; this script does not download media.
 set -Eeuo pipefail
 umask 077
 
 readonly RELEASE="https://github.com/yt-dlp/yt-dlp/releases/latest/download"
-readonly BIN="/usr/local/bin/yt-dlp"
+readonly BIN_DIR="/usr/local/bin"
+readonly YOINKS_BIN="${BIN_DIR}/yoinks-mpd"
+readonly YTDLP_BIN="${BIN_DIR}/yt-dlp"
 
 fail() { printf 'yoinks-mpd-install: ERROR: %s\n' "$*" >&2; exit 1; }
 info() { printf 'yoinks-mpd-install: %s\n' "$*" >&2; }
+have() { command -v "$1" >/dev/null 2>&1; }
 
-[[ $EUID -eq 0 ]] || fail "run with sudo"
-command -v apt-get >/dev/null 2>&1 || fail "APT-based Debian/Raspberry Pi OS is required"
-command -v curl >/dev/null 2>&1 || fail "curl is required"
+[[ ${EUID} -eq 0 ]] || fail "uruchom przez sudo: sudo bash scripts/yoinks-mpd/install.sh"
+have apt-get || fail "wymagany jest Debian/Raspberry Pi OS z APT"
+have sha256sum || fail "brak sha256sum"
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd -P)"
+SOURCE_DIR="${REPO_ROOT}/yoinks-mpd"
+[[ -f "${SOURCE_DIR}/CMakeLists.txt" ]] || fail "nie znaleziono yoinks-mpd/CMakeLists.txt; uruchom skrypt z checkoutu repozytorium"
 
 case "$(uname -m)" in
-  aarch64|arm64) asset=yt-dlp_linux_aarch64; archive=0 ;;
-  armv7l|armv7*) asset=yt-dlp_linux_armv7l.zip; archive=1 ;;
-  x86_64|amd64) asset=yt-dlp_linux; archive=0 ;;
-  *) fail "unsupported CPU architecture: $(uname -m); supported: aarch64, armv7l, x86_64" ;;
+  aarch64|arm64) asset="yt-dlp_linux_aarch64"; archive=0 ;;
+  armv7l|armv7*) asset="yt-dlp_linux_armv7l.zip"; archive=1 ;;
+  x86_64|amd64) asset="yt-dlp_linux"; archive=0 ;;
+  *) fail "nieobsługiwana architektura CPU: $(uname -m); obsługiwane: aarch64, armv7l, x86_64" ;;
 esac
 
-info "installing curl, unzip and CA certificates; MPD and its queue remain untouched"
-export DEBIAN_FRONTEND=noninteractive
-apt-get update
-apt-get install -y --no-install-recommends ca-certificates curl unzip
-
-tmp=$(mktemp -d)
-cleanup() { rm -rf -- "$tmp"; }
+tmp="$(mktemp -d "${TMPDIR:-/var/tmp}/yoinks-mpd-install.XXXXXXXX")"
+cleanup() { rm -rf -- "${tmp}"; }
 trap cleanup EXIT INT TERM HUP
 
-info "downloading official yt-dlp release asset: $asset"
-curl -fLsS "$RELEASE/$asset" -o "$tmp/$asset"
-curl -fLsS "$RELEASE/SHA2-256SUMS" -o "$tmp/SHA2-256SUMS"
+info "krok 1/6: instalacja narzędzi kompilacji i bibliotek"
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y --no-install-recommends \
+  ca-certificates curl unzip cmake g++ make pkg-config \
+  libboost-dev nlohmann-json3-dev libcurl4-openssl-dev
 
-expected=$(awk -v n="$asset" '$2 == n || $2 == "*"n {print $1; exit}' "$tmp/SHA2-256SUMS")
-[[ -n "$expected" ]] || fail "upstream SHA-256 entry not found for $asset"
-actual=$(sha256sum "$tmp/$asset" | awk '{print $1}')
-[[ "$actual" == "$expected" ]] || fail "SHA-256 verification failed"
+for tool in cmake c++ ctest curl unzip install; do
+  have "$tool" || fail "brak wymaganego narzędzia po instalacji pakietów: $tool"
+done
+
+info "krok 2/6: konfiguracja CMake (C++17, Release, testy włączone)"
+cmake -S "${SOURCE_DIR}" -B "${tmp}/build" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DYOINKS_MPD_BUILD_TESTS=ON
+
+info "krok 3/6: kompilacja z -Wall -Wextra -Wpedantic -Werror"
+cmake --build "${tmp}/build" --parallel 2
+[[ -x "${tmp}/build/yoinks-mpd" ]] || fail "kompilacja nie utworzyła pliku yoinks-mpd"
+
+info "krok 4/6: uruchomienie pełnego zestawu CTest"
+ctest --test-dir "${tmp}/build" --output-on-failure
+info "wszystkie testy CTest zakończyły się powodzeniem"
+
+info "krok 5/6: pobranie oficjalnego yt-dlp i kontrola SHA-256"
+curl --fail --location --silent --show-error "${RELEASE}/${asset}" -o "${tmp}/${asset}"
+curl --fail --location --silent --show-error "${RELEASE}/SHA2-256SUMS" -o "${tmp}/SHA2-256SUMS"
+expected="$(awk -v n="${asset}" '$2 == n || $2 == "*"n {print $1; exit}' "${tmp}/SHA2-256SUMS")"
+[[ -n "${expected}" ]] || fail "brak wpisu SHA-256 dla ${asset} w upstreamowym SHA2-256SUMS"
+actual="$(sha256sum "${tmp}/${asset}" | awk '{print $1}')"
+[[ "${actual}" == "${expected}" ]] || fail "weryfikacja SHA-256 yt-dlp nie powiodła się"
 
 if (( archive )); then
-  unzip -q "$tmp/$asset" -d "$tmp/unpacked"
-  candidate="$tmp/unpacked/yt-dlp"
-  [[ -f "$candidate" ]] || candidate=$(find "$tmp/unpacked" -type f -name yt-dlp -print -quit)
+  unzip -q "${tmp}/${asset}" -d "${tmp}/yt-dlp-unpacked"
+  candidate="${tmp}/yt-dlp-unpacked/yt-dlp"
+  if [[ ! -f "${candidate}" ]]; then
+    candidate="$(find "${tmp}/yt-dlp-unpacked" -type f -name yt-dlp -print -quit)"
+  fi
 else
-  candidate="$tmp/$asset"
+  candidate="${tmp}/${asset}"
 fi
-[[ -n "${candidate:-}" && -f "$candidate" ]] || fail "yt-dlp executable not found"
-install -D -m 0755 "$candidate" "$BIN"
-"$BIN" --version >/dev/null || fail "yt-dlp version check failed"
+[[ -n "${candidate:-}" && -f "${candidate}" ]] || fail "nie znaleziono wykonywalnego pliku yt-dlp"
+chmod 0755 "${candidate}"
+"${candidate}" --version >/dev/null || fail "kontrola wersji yt-dlp nie powiodła się"
 
-info "installed yt-dlp $("$BIN" --version)"
-info "yt-dlp is a resolver dependency only; no audio file download workflow is installed"
-info "HTTP proxy service is not installed by this bootstrap script"
-info "MPD was not installed, restarted, reconfigured, or given queue commands"
-info "continue with docs/yoinks-mpd/INSTALL_RASPBERRY_PI.md"
+info "krok 6/6: instalacja zweryfikowanych plików wykonywalnych"
+install -d -m 0755 "${BIN_DIR}"
+install -m 0755 "${tmp}/build/yoinks-mpd" "${BIN_DIR}/.yoinks-mpd.new"
+install -m 0755 "${candidate}" "${BIN_DIR}/.yt-dlp.new"
+mv -f -- "${BIN_DIR}/.yoinks-mpd.new" "${YOINKS_BIN}"
+mv -f -- "${BIN_DIR}/.yt-dlp.new" "${YTDLP_BIN}"
+
+"${YTDLP_BIN}" --version >/dev/null || fail "zainstalowany yt-dlp nie przechodzi kontroli uruchomienia"
+[[ -x "${YOINKS_BIN}" ]] || fail "zainstalowany yoinks-mpd nie jest wykonywalny"
+
+info "WYNIK: kompilacja, testy i instalacja zakończone powodzeniem"
+info "yoinks-mpd: ${YOINKS_BIN}"
+info "yt-dlp: ${YTDLP_BIN} (resolver metadanych/adresu źródłowego; bez pobierania mediów)"
+if have mpd; then
+  info "wykryto MPD: $(mpd --version 2>/dev/null | head -n 1)"
+  if have systemctl && systemctl is-active --quiet mpd; then
+    info "usługa MPD jest aktywna; pozostawiono ją bez zmian"
+  elif have pgrep && pgrep -x mpd >/dev/null 2>&1; then
+    info "proces MPD działa; pozostawiono go bez zmian"
+  else
+    info "MPD jest zainstalowany, ale stan aktywności usługi nie został potwierdzony"
+  fi
+else
+  info "nie wykryto polecenia mpd; nie instalowano MPD"
+fi
+
+info "UWAGA: to wydanie Yoinks-MPD jest nadal szkieletem API. Nie ma jeszcze gotowego endpointu strumienia HTTP ani integracji kolejki MPD."
+info "Skrypt nie tworzy ani nie uruchamia usługi systemd, nie zmienia konfiguracji MPD, nie czyści kolejki i nie zapisuje mediów na dysku."
+info "Transport mediów pozostaje wyłącznie HTTP proxy; żadne FIFO, potoki nazwane ani pliki audio nie są używane."
