@@ -32,6 +32,19 @@ health="$(curl --silent --show-error "http://127.0.0.1:$port/api/v1/health")"
 grep -q '"api_version":1' <<<"$health"
 grep -q '"control_ready":false' <<<"$health"
 
+# Stream route rejects unsupported methods and Range rather than returning misleading media.
+invalid_stream_status="$(curl --silent -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/stream/invalid")"
+[[ "$invalid_stream_status" == "404" ]]
+
+head_stream_status="$(curl --silent -I -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/stream/0123456789abcdef0123456789abcdef")"
+[[ "$head_stream_status" == "405" ]]
+
+range_stream_status="$(curl --silent -o /dev/null -w '%{http_code}' -H 'Range: bytes=0-99' "http://127.0.0.1:$port/stream/0123456789abcdef0123456789abcdef")"
+[[ "$range_stream_status" == "501" ]]
+
+unknown_stream_status="$(curl --silent -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/stream/0123456789abcdef0123456789abcdef")"
+[[ "$unknown_stream_status" == "404" ]]
+
 # Multiple independent clients must be served concurrently.
 seq 1 8 | xargs -P 8 -I '{}' sh -c \
     'curl --silent --show-error --fail "http://127.0.0.1:'"$port"'/api/v1/health" >/dev/null'
