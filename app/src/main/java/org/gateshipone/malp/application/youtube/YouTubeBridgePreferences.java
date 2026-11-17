@@ -55,6 +55,18 @@ public final class YouTubeBridgePreferences {
         String ciphertextValue = secure.getString(CIPHERTEXT, null);
         if (wrapped == null || ivValue == null || ciphertextValue == null) return "";
 
+        String trimmedToken = token.trim();
+        if (trimmedToken.length() < 43 || trimmedToken.length() > 128) {
+            throw new IllegalArgumentException("Bridge token must be 43-128 base64url characters");
+        }
+        for (int i = 0; i < trimmedToken.length(); i++) {
+            char c = trimmedToken.charAt(i);
+            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+                    || (c >= '0' && c <= '9') || c == '_' || c == '-')) {
+                throw new IllegalArgumentException("Bridge token contains invalid characters");
+            }
+        }
+
         try {
             KeyStore keyStore = loadKeyStore();
             if (!keyStore.containsAlias(KEY_ALIAS)) return "";
@@ -83,8 +95,8 @@ public final class YouTubeBridgePreferences {
     }
 
     public static void save(Context context, String baseUrl, String token) {
-        if (baseUrl == null || token == null) {
-            throw new IllegalArgumentException("Bridge URL and token are required");
+        if (baseUrl == null || !baseUrl.trim().startsWith("https://") || token == null) {
+            throw new IllegalArgumentException("HTTPS bridge URL and token are required");
         }
         PreferenceManager.getDefaultSharedPreferences(context).edit()
                 .putString(context.getString(R.string.pref_youtube_bridge_url_key), baseUrl.trim())
@@ -111,7 +123,7 @@ public final class YouTubeBridgePreferences {
             new SecureRandom().nextBytes(iv);
             Cipher aes = Cipher.getInstance("AES/GCM/NoPadding");
             aes.init(Cipher.ENCRYPT_MODE, aesKey, new GCMParameterSpec(128, iv));
-            byte[] ciphertext = aes.doFinal(token.trim().getBytes(StandardCharsets.UTF_8));
+            byte[] ciphertext = aes.doFinal(trimmedToken.getBytes(StandardCharsets.UTF_8));
 
             Cipher rsa = Cipher.getInstance("RSA/ECB/PKCS1Padding");
             rsa.init(Cipher.ENCRYPT_MODE, keyStore.getCertificate(KEY_ALIAS).getPublicKey());
