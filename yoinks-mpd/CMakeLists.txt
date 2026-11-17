@@ -7,13 +7,26 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(yoinks_mpd_core
     src/bounded_stream_buffer.cpp
+    src/http_server.cpp
 )
 target_include_directories(yoinks_mpd_core PUBLIC include)
 target_compile_options(yoinks_mpd_core PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic;-Werror>
 )
 find_package(Threads REQUIRED)
-target_link_libraries(yoinks_mpd_core PUBLIC Threads::Threads)
+find_package(Boost 1.74 REQUIRED COMPONENTS system)
+find_package(nlohmann_json 3.2.0 REQUIRED)
+target_link_libraries(yoinks_mpd_core PUBLIC
+    Threads::Threads
+    Boost::system
+    nlohmann_json::nlohmann_json
+)
+
+add_executable(yoinks-mpd src/main.cpp)
+target_link_libraries(yoinks-mpd PRIVATE yoinks_mpd_core)
+target_compile_options(yoinks-mpd PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic;-Werror>
+)
 
 option(YOINKS_MPD_BUILD_TESTS "Build Yoinks-MPD core tests" ON)
 if(YOINKS_MPD_BUILD_TESTS)
