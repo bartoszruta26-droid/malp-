@@ -1,4 +1,5 @@
 name: Yoinks-MPD C++ core
+# Keep the lifecycle sanitizer diagnostics in the required CI path.
 
 on:
   push:
