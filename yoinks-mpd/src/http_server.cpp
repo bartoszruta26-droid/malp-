@@ -186,16 +186,27 @@ void serveStream(beast::tcp_stream& stream, const std::string& id,
                  const std::shared_ptr<LazyStreamSessionRegistry>& sessions,
                  const std::shared_ptr<YtDlpResolver>& resolver) {
     beast::error_code error;
-    if (!sessions || !resolver || !sessions->activate(id,
+    if (!sessions || !resolver || !sessions->contains(id)) {
+        auto reply = response(http::status::not_found,
+            R"({"success":false,"error":{"code":"stream_not_found","message":"Stream session not found"}})", 11);
+        stream.expires_after(std::chrono::seconds(5));
+        http::write(stream, reply, error);
+        return;
+    }
+    if (!sessions->activate(id,
             [resolver](const std::string& video_id, std::string& source_url,
                        const std::atomic_bool* cancellation) {
                 return resolver->resolveAudioUrl(video_id, source_url, cancellation);
             })) {
-        auto reply = response(http::status::bad_gateway,
-            R"({"success":false,"error":{"code":"stream_activation_failed","message":"Unable to activate media stream"}})", 11);
+        const bool failed = sessions->isFailed(id);
+        auto reply = response(failed ? http::status::bad_gateway : http::status::service_unavailable,
+            failed
+                ? R"({"success":false,"error":{"code":"stream_activation_failed","message":"Unable to activate media stream"}})"
+                : R"({"success":false,"error":{"code":"stream_busy","message":"Stream session is already activating or capacity is full"}})",
+            11);
         stream.expires_after(std::chrono::seconds(5));
         http::write(stream, reply, error);
-        if (sessions) sessions->erase(id);
+        if (failed) sessions->erase(id);
         return;
     }
     const auto upstream = sessions->findActive(id);
