@@ -24,6 +24,10 @@ StreamSessionRegistry::StreamSessionRegistry(StreamSessionRegistryConfig config)
     }
 }
 
+StreamSessionRegistry::~StreamSessionRegistry() {
+    clear();
+}
+
 std::string StreamSessionRegistry::generateId() {
     std::array<unsigned char, 16> bytes{};
     std::size_t offset = 0;
