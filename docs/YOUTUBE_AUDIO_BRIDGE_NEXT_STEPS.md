@@ -263,3 +263,11 @@ Nie publikować APK jako „gotowego do instalacji” na podstawie samego CI. Wy
 - The failure was in the workflow harness, not an Android runtime crash: the smoke-test script could not find the APK at its relative path after the emulator action started. Emulator boot completed, but `adb install` and intent checks were never reached.
 - Updated the workflow to resolve the APK using the absolute `$GITHUB_WORKSPACE` path and emit a workspace APK search diagnostic if the file is absent. Commit: `32bd484895ee80764e99a1a741f895f170c0f370`.
 - Await the new run. The emulator test is only green if the step reaches install, launches MainActivity, executes both share intents, and completes the fatal-exception check. Artifact upload must also succeed for the same head SHA.
+
+
+### Przegląd ścieżki HTTP i buforowania — 17.11.2026
+- Przegląd `http_api_test.sh` potwierdza testy zdrowia API, autoryzacji, walidacji trybu i URL, limitu treści, współbieżnych zapytań oraz zamykania procesu. Test żądania kolejki z poprawnymi metadanymi kończy się jednak oczekiwanym `503`, ponieważ MPD jest celowo ustawiony na zamknięty port. Ten test potwierdza fail-closed, ale nie dowodzi sukcesu pełnego przepływu HTTP → yt-dlp → sesja → MPD.
+- `mpd_queue_manager_test.cpp` ma osobne testy z serwerem MPD mock, w tym dopisywanie pozycji i tryb play-now. Nie zastępują one integracji warstwy HTTP z działającym mock MPD.
+- Następny etap testów: dodać deterministyczny scenariusz sukcesu HTTP z mock yt-dlp i izolowanym mock MPD, sprawdzający kod 200, liczbę dodanych wpisów, kolejność playlisty i brak niezamierzonego polecenia `playid` dla trybu `enqueue`. Mock ma nasłuchiwać wyłącznie na loopback i używać osobnego portu; żadnego połączenia z produkcyjnym MPD.
+- Potwierdzono w kodzie ograniczenie buforowania RAM: rejestr sesji ogranicza liczbę aktywnych strumieni do maksymalnie 2, a łączna pojemność buforów upstream jest ograniczona do 8 MiB. `yt-dlp` uruchamiany jest z `--no-cache-dir` i `--skip-download`; audio jest pobierane przez libcurl do ograniczonego bufora pamięciowego.
+- Nadal wymagają osobnych testów: rzeczywisty odczyt strumienia HTTP na podstawie kontrolowanego upstream, zachowanie po zerwaniu klienta i ponownej aktywacji, wygaśnięcie URL i ponowne rozwiązanie, a także brak plików audio/cache na dysku podczas rzeczywistego odtwarzania.
