@@ -406,3 +406,9 @@ Nie publikować APK jako „gotowego do instalacji” na podstawie samego CI. Wy
   4. Then continue back-pressure, slow consumer/client disconnect, upstream timeout/error, reconnect/re-resolution, byte limits, and DNS/SSRF review.
 - Keep live YouTube/CDN retrieval, target MPD CURL capability, audible hardware playback, and RAM-only/no-persistent-storage verification as separate acceptance gates. Do not deploy or restart the production service without explicit approval.
 
+### Additional lifecycle test added — awaiting verification
+
+- Added `testRetainOnlyPreservesUnpublishedActivationAndSlotAccounting()` in commit `f326fd26b5b9385d97c3e4ca47035e97eb266580`.
+- The deterministic test pauses activation after upstream start and before publication, calls `retainOnly({})`, verifies that the in-flight session and its single active slot are preserved, rejects a second activation at the configured one-stream limit, then verifies that releasing the first stream frees the slot for the second session.
+- CI and Raspberry Pi build/test results for this new commit are not yet confirmed. Do not mark this test as passed until both gates complete.
+
