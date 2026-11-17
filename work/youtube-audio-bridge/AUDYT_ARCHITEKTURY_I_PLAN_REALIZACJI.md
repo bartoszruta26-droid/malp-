@@ -606,3 +606,40 @@ Rozszerzono `YouTubeShareParserTest.java` o przypadki nieprawidłowego identyfik
 3. Dopasować Android klient do POST /api/v1/queue; usunąć założenie, że serwer zwraca stream_url.
 4. Dodać bezpieczny magazyn tokenu Android Keystore i zawęzić globalne cleartext traffic po audycie pozostałych funkcji MALP.
 
+
+
+## Aktualizacja prac — Android API, Android Keystore i C++ core (2026-11-17)
+
+### Android — zgodność z kontraktem kolejki
+
+- `YouTubeAudioBridgeClient` wysyła teraz uwierzytelnione `POST /api/v1/queue` z polami `url` i `mode`.
+- Klient wymaga tokenu i nie przyjmuje/nie parsuje `stream_url` ani adresów CDN.
+- Sukces jest akceptowany tylko po odpowiedzi `success=true`, poprawnym `request_id` i liczbie `queued` od 1 do 200.
+- `MainActivity` informuje o dodaniu do kolejki lub rozpoczęciu odtwarzania na podstawie odpowiedzi serwera. Nie zgłasza sukcesu przed potwierdzeniem API.
+
+### Android — ochrona tokenu
+
+- Token jest szyfrowany AES-256-GCM; klucz AES jest opakowany kluczem RSA przechowywanym w Android Keystore.
+- Dawny wpis tokenu w zwykłych SharedPreferences jest usuwany przy odczycie; kod nie wraca do przechowywania jawnego tekstu.
+- W razie braku/utraty klucza odczyt kończy się pustym tokenem (fail closed); użytkownik musi ponownie wprowadzić dane.
+- Wymagane są testy na minimalnym API 21 i aktualnych wersjach Androida; nie wykonano jeszcze kompilacji Android/Gradle w tym środowisku.
+
+### W3 — C++17 core rozpoczęty
+
+Dodano katalog `yoinks-mpd/`:
+- CMake dla C++17 i biblioteki core bez zależności zewnętrznych;
+- `BoundedStreamBuffer`: stała pojemność RAM, ring buffer, back-pressure producenta, progresywny odczyt, EOF po close i natychmiastowe cancel;
+- testy: pojemność zero, zawijanie bufora, zachowanie kolejności bajtów, back-pressure, drenaż po EOF i anulowanie;
+- workflow GitHub Actions budujący projekt z ostrzeżeniami traktowanymi jako błędy i uruchamiający CTest.
+
+**Weryfikacja lokalna:** skompilowano implementację C++17 z `-Wall -Wextra -Wpedantic -Werror` i uruchomiono testy bufora; wynik PASS. Test dotyczy wyłącznie prymitywu bufora, nie serwera HTTP ani odtwarzania MPD. Workflow GitHub Actions został dodany, ale wynik zdalnego przebiegu nie został jeszcze potwierdzony.
+
+### Otwarte zadania
+
+1. Dodać testy jednostkowe klienta Android i wykonać `./gradlew testDebugUnitTest` oraz kompilację debug.
+2. Zweryfikować implementację Keystore na API 21, API 23+ i aktualnym Androidzie.
+3. Dodać serwer HTTP C++, Bearer auth, limity żądań i bezpieczne parsowanie JSON.
+4. Dodać resolver yt-dlp wywoływany przez `posix_spawn/execve`, bez shell i bez zapisu mediów.
+5. Zaimplementować HTTP relay z back-pressure, refresh URL, cancellation i testami mock upstream.
+6. Dodać MPD protocol queue manager i testy semantyki enqueue/play_now.
+7. Uzyskać raport MPD CURL z docelowego Raspberry Pi.
