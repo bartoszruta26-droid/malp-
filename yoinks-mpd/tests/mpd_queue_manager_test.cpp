@@ -57,13 +57,13 @@ private:
         try {
             tcp::socket socket(context_);
             acceptor_.accept(socket);
-            send(socket, "OK MPD 0.23.15\\n");
+            send(socket, "OK MPD 0.23.15\n");
             asio::streambuf buffer;
             std::size_t add_count = 0;
             std::uint32_t next_id = 700;
             for (;;) {
                 boost::system::error_code error;
-                asio::read_until(socket, buffer, '\\n', error);
+                asio::read_until(socket, buffer, '\n', error);
                 if (error) break;
                 std::istream input(&buffer);
                 std::string line;
@@ -72,18 +72,18 @@ private:
                 if (line.rfind("addid ", 0) == 0) {
                     ++add_count;
                     if (fail_second_add_ && add_count == 2) {
-                        send(socket, "ACK [50@0] {addid} simulated add failure\\n");
+                        send(socket, "ACK [50@0] {addid} simulated add failure\n");
                     } else {
-                        send(socket, "Id: " + std::to_string(next_id++) + "\\nOK\\n");
+                        send(socket, "Id: " + std::to_string(next_id++) + "\nOK\n");
                     }
                 } else if (line.rfind("playid ", 0) == 0) {
                     send(socket, fail_play_
-                        ? "ACK [50@0] {playid} simulated play failure\\n"
-                        : "OK\\n");
+                        ? "ACK [50@0] {playid} simulated play failure\n"
+                        : "OK\n");
                 } else if (line.rfind("deleteid ", 0) == 0) {
-                    send(socket, "OK\\n");
+                    send(socket, "OK\n");
                 } else {
-                    send(socket, "ACK [5@0] {unknown} unsupported test command\\n");
+                    send(socket, "ACK [5@0] {unknown} unsupported test command\n");
                 }
             }
         } catch (...) {
@@ -187,10 +187,10 @@ int main() {
         testAddFailureRollsBackOnlyNewEntries();
         testPlayNowRejectionRollsBackNewEntries();
         testInvalidProxyUriIsRejectedBeforeConnecting();
-        std::cout << "All MPD queue manager tests passed\\n";
+        std::cout << "All MPD queue manager tests passed\n";
         return 0;
     } catch (const std::exception& error) {
-        std::cerr << "Test failure: " << error.what() << '\\n';
+        std::cerr << "Test failure: " << error.what() << '\n';
         return 1;
     }
 }
