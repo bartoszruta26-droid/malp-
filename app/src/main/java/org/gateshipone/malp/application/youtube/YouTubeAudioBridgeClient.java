@@ -113,10 +113,9 @@ public final class YouTubeAudioBridgeClient {
         if (queued < 1 || queued > MAX_ITEMS) {
             throw new IOException("Bridge returned an invalid queued item count");
         }
+        // API v1 confirms the queue count and playback state. A request identifier
+        // is optional and is not fabricated by the server.
         String requestId = json.optString("request_id", "");
-        if (requestId.isEmpty()) {
-            throw new IOException("Bridge response is missing request_id");
-        }
         return new Result(requestId, json.optString("title", ""),
                 json.optBoolean("playlist", queued > 1), queued,
                 json.optBoolean("started", false));
