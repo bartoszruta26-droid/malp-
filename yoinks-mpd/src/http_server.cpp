@@ -30,9 +30,9 @@ constexpr std::size_t kMaxBodyBytes = 16 * 1024;
 constexpr std::size_t kMaxHeaderBytes = 8 * 1024;
 
 bool constantTimeEqual(const std::string& left, const std::string& right) {
-    const std::size_t count = std::max(left.size(), right.size());
+    constexpr std::size_t kComparedBytes = 128;
     unsigned int difference = static_cast<unsigned int>(left.size() ^ right.size());
-    for (std::size_t i = 0; i < count; ++i) {
+    for (std::size_t i = 0; i < kComparedBytes; ++i) {
         const unsigned char a = i < left.size()
                 ? static_cast<unsigned char>(left[i]) : 0;
         const unsigned char b = i < right.size()
@@ -219,8 +219,10 @@ void serveConnection(tcp::socket socket, const std::string& token) {
 }  // namespace
 
 HttpServer::HttpServer(HttpServerConfig config) : config_(std::move(config)) {
-    if (config_.bearer_token.size() < 32) {
-        throw std::invalid_argument("YOINKS_MPD_TOKEN must contain at least 32 characters");
+    if (config_.bearer_token.size() < 43 || config_.bearer_token.size() > 128
+            || !validIdentifier(config_.bearer_token, 43, 128)) {
+        throw std::invalid_argument(
+                "YOINKS_MPD_TOKEN must be 43-128 base64url characters (at least 256 bits)");
     }
 }
 
