@@ -14,16 +14,19 @@ readonly SERVICE_USER="yoinks-mpd"
 readonly SERVICE_GROUP="yoinks-mpd"
 
 NO_START=0
+RESTART_ACTIVE=0
 CHECK_YOUTUBE=0
 for arg in "$@"; do
   case "$arg" in
     --no-start) NO_START=1 ;;
+    --restart) RESTART_ACTIVE=1 ;;
     --check-youtube) CHECK_YOUTUBE=1 ;;
     -h|--help)
       cat <<'USAGE'
 Użycie: sudo bash scripts/yoinks-mpd/install.sh [opcje]
 
   --no-start       Zainstaluj i włącz jednostkę systemd, ale jej nie uruchamiaj.
+  --restart        Zrestartuj działającą usługę (może przerwać bieżący strumień).
   --check-youtube  Wykonaj dodatkowy test pobrania samych metadanych YouTube.
   -h, --help       Pokaż tę pomoc.
 
@@ -161,10 +164,21 @@ systemctl enable yoinks-mpd.service
 
 if (( NO_START )); then
   info "usługa została włączona, ale nie uruchomiona (--no-start)"
+elif systemctl is-active --quiet yoinks-mpd.service; then
+  if (( RESTART_ACTIVE )); then
+    info "restart aktywnej usługi na jawne żądanie (--restart)"
+    systemctl restart yoinks-mpd.service
+  else
+    info "usługa już działa; pozostawiono ją bez restartu, aby nie przerwać aktywnego strumienia"
+  fi
 else
-  systemctl restart yoinks-mpd.service
-  systemctl is-active --quiet yoinks-mpd.service \
-    || { systemctl --no-pager --full status yoinks-mpd.service >&2 || true; fail "usługa nie uruchomiła się poprawnie"; }
+  systemctl start yoinks-mpd.service
+fi
+if (( ! NO_START )); then
+  systemctl is-active --quiet yoinks-mpd.service || {
+    systemctl --no-pager --full status yoinks-mpd.service >&2 || true
+    fail "usługa nie uruchomiła się poprawnie"
+  }
 fi
 
 info "8/8: kontrola zainstalowanych plików"
