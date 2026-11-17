@@ -120,3 +120,11 @@ Serwer nasłuchuje domyślnie wyłącznie na 127.0.0.1:8788. Nie wystawiać go d
 Serwer dodatkowo waliduje URL po stronie Raspberry Pi: wymaga HTTPS, dokładnego hosta z allowlisty, odrzuca userinfo i fragmenty oraz sprawdza identyfikatory filmu/playlisty i dozwolone ścieżki. Nie ufa walidacji wykonanej wyłącznie przez klienta Android.
 
 The server requires a 43–128 character base64url bearer token (minimum 256-bit entropy) and compares credentials over a fixed 128-byte loop. Generate tokens from a cryptographically secure random source; do not use human passwords.
+
+
+
+## Strumień upstream — częściowa implementacja
+
+Dodano komponent C++ `HttpUpstreamStream` oparty na libcurl. Pobiera dane progresywnie do `BoundedStreamBuffer` w RAM (domyślnie 256 KiB), z limitem 512 MiB na sesję i back-pressure. Dopuszczony jest HTTPS na domenach `*.googlevideo.com`, port 443, bez userinfo. Weryfikacja certyfikatu i nazwy hosta jest włączona. Przekierowania są wyłączone — resolver musi odnowić źródło zamiast przekazywać transfer do niezweryfikowanej domeny. Anulowanie przerywa transfer i budzi producenta zablokowanego na buforze.
+
+Komponent nie jest jeszcze połączony z endpointem lokalnego proxy HTTP. Nie udostępnia MPD żadnego URI i nie zmienia kolejki. Testy walidacji URL nie wykonują połączeń internetowych.
