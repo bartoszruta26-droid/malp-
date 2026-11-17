@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 #include "yoinks/http_server.hpp"
+#include "yoinks/stream_session_registry.hpp"
 
 #include <boost/asio.hpp>
 #include <boost/asio/post.hpp>
@@ -13,6 +14,7 @@
 #include <algorithm>
 #include <atomic>
 #include <array>
+#include <sstream>
 #include <chrono>
 #include <cctype>
 #include <memory>
@@ -200,7 +202,64 @@ void rejectBusy(tcp::socket socket) {
     stream.socket().close(error);
 }
 
-void serveConnection(tcp::socket socket, const std::string& token) {
+
+bool validStreamId(const std::string& id) {
+    if (id.size() != 32) return false;
+    for (const unsigned char c : id) {
+        if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) return false;
+    }
+    return true;
+}
+
+void serveStream(beast::tcp_stream& stream, const std::string& id,
+                 const std::shared_ptr<StreamSessionRegistry>& sessions) {
+    const auto upstream = sessions->find(id);
+    beast::error_code error;
+    if (!upstream) {
+        auto reply = response(http::status::not_found,
+            R"({"success":false,"error":{"code":"stream_not_found","message":"Stream session not found"}})", 11);
+        stream.expires_after(std::chrono::seconds(5));
+        http::write(stream, reply, error);
+        return;
+    }
+    http::response<http::empty_body> header{http::status::ok, 11};
+    header.set(http::field::server, "yoinks-mpd");
+    header.set(http::field::content_type, "application/octet-stream");
+    header.set(http::field::cache_control, "no-store");
+    header.set(http::field::accept_ranges, "none");
+    header.chunked(true);
+    header.keep_alive(false);
+    http::response_serializer<http::empty_body> serializer{header};
+    stream.expires_after(std::chrono::seconds(10));
+    http::write_header(stream, serializer, error);
+    if (error) { sessions->erase(id); return; }
+
+    std::array<std::uint8_t, 16384> block{};
+    bool completed = false;
+    while (!error) {
+        const std::size_t count = upstream->read(block.data(), block.size());
+        if (count == 0) {
+            completed = upstream->state() == UpstreamState::completed;
+            break;
+        }
+        std::ostringstream line;
+        line << std::hex << count << "\r\n";
+        const std::string chunk_header = line.str();
+        stream.expires_after(std::chrono::seconds(30));
+        asio::write(stream, asio::buffer(chunk_header), error);
+        if (!error) asio::write(stream, asio::buffer(block.data(), count), error);
+        if (!error) asio::write(stream, asio::buffer("\r\n", 2), error);
+    }
+    if (completed && !error) {
+        stream.expires_after(std::chrono::seconds(5));
+        asio::write(stream, asio::buffer("0\r\n\r\n", 5), error);
+    }
+    sessions->erase(id);
+}
+
+void serveConnection(tcp::socket socket, const std::string& token,
+                     const std::shared_ptr<StreamSessionRegistry>& sessions,
+                     const std::shared_ptr<std::atomic<std::size_t>>& active_streams) {
     beast::tcp_stream stream{std::move(socket)};
     stream.expires_after(std::chrono::seconds(10));
     beast::error_code error;
@@ -224,6 +283,39 @@ void serveConnection(tcp::socket socket, const std::string& token) {
     }
 
     auto request = parser.release();
+    const std::string target(request.target().data(), request.target().size());
+    if (target.compare(0, 8, "/stream/") == 0) {
+        const std::string id = target.substr(8);
+        auto send_error = [&](http::status status, const std::string& body) {
+            auto reply = response(status, body, request.version());
+            stream.expires_after(std::chrono::seconds(5));
+            http::write(stream, reply, error);
+        };
+        if (request.method() != http::verb::get) {
+            send_error(http::status::method_not_allowed,
+                R"({"success":false,"error":{"code":"method_not_allowed","message":"GET required"}})");
+        } else if (request.find(http::field::range) != request.end()) {
+            auto reply = response(http::status::not_implemented,
+                R"({"success":false,"error":{"code":"range_not_supported","message":"Range requests are not supported"}})",
+                request.version());
+            reply.set(http::field::accept_ranges, "none");
+            stream.expires_after(std::chrono::seconds(5));
+            http::write(stream, reply, error);
+        } else if (!validStreamId(id)) {
+            send_error(http::status::not_found,
+                R"({"success":false,"error":{"code":"stream_not_found","message":"Stream session not found"}})");
+        } else if (active_streams->fetch_add(1) >= 2) {
+            active_streams->fetch_sub(1);
+            send_error(http::status::service_unavailable,
+                R"({"success":false,"error":{"code":"stream_capacity_reached","message":"Stream capacity reached"}})");
+        } else {
+            try { serveStream(stream, id, sessions); } catch (...) { sessions->erase(id); }
+            active_streams->fetch_sub(1);
+        }
+        stream.socket().shutdown(tcp::socket::shutdown_both, error);
+        stream.socket().close(error);
+        return;
+    }
     auto reply = handle(request, token);
     stream.expires_after(std::chrono::seconds(5));
     http::write(stream, reply, error);
@@ -247,6 +339,8 @@ void HttpServer::run() {
     asio::io_context context{1};
     asio::thread_pool workers{kWorkerCount};
     auto active_connections = std::make_shared<std::atomic<std::size_t>>(0);
+    auto active_streams = std::make_shared<std::atomic<std::size_t>>(0);
+    auto sessions = std::make_shared<StreamSessionRegistry>();
     const auto address = asio::ip::make_address(config_.bind_address);
     if (!address.is_loopback()) {
         throw std::invalid_argument(
@@ -264,9 +358,9 @@ void HttpServer::run() {
         }
         asio::post(workers, [socket = std::move(socket),
                              token = config_.bearer_token,
-                             active_connections]() mutable {
+                             active_connections, active_streams, sessions]() mutable {
             try {
-                serveConnection(std::move(socket), token);
+                serveConnection(std::move(socket), token, sessions, active_streams);
             } catch (...) {
                 // A malformed client must not terminate a worker or expose details.
             }
