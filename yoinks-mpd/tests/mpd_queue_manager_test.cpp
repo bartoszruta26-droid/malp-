@@ -24,9 +24,11 @@ void require(bool condition, const std::string& message) {
 
 class MockMpd final {
 public:
-    explicit MockMpd(bool fail_second_add = false, bool fail_play = false)
+    explicit MockMpd(bool fail_second_add = false, bool fail_play = false,
+                     bool drop_add_response = false, bool drop_play_response = false)
         : acceptor_(context_, tcp::endpoint{asio::ip::address_v4::loopback(), 0}),
-          fail_second_add_(fail_second_add), fail_play_(fail_play) {
+          fail_second_add_(fail_second_add), fail_play_(fail_play),
+          drop_add_response_(drop_add_response), drop_play_response_(drop_play_response) {
         port_ = acceptor_.local_endpoint().port();
         worker_ = std::thread([this]() { serve(); });
     }
@@ -71,12 +73,14 @@ private:
                 commands_.push_back(line);
                 if (line.rfind("addid ", 0) == 0) {
                     ++add_count;
+                    if (drop_add_response_ && add_count == 1) return;
                     if (fail_second_add_ && add_count == 2) {
                         send(socket, "ACK [50@0] {addid} simulated add failure\n");
                     } else {
                         send(socket, "Id: " + std::to_string(next_id++) + "\nOK\n");
                     }
                 } else if (line.rfind("playid ", 0) == 0) {
+                    if (drop_play_response_) return;
                     send(socket, fail_play_
                         ? "ACK [50@0] {playid} simulated play failure\n"
                         : "OK\n");
@@ -96,6 +100,8 @@ private:
     std::thread worker_;
     bool fail_second_add_;
     bool fail_play_;
+    bool drop_add_response_;
+    bool drop_play_response_;
     std::uint16_t port_{0};
     std::vector<std::string> commands_;
     std::exception_ptr worker_error_;
@@ -166,6 +172,30 @@ void testPlayNowRejectionRollsBackNewEntries() {
             "failed play-now should remove only its newly-added item");
 }
 
+
+void testLostAddReplyIsReportedAsAmbiguousWithoutUnsafeRollback() {
+    MockMpd mock(false, false, true, false);
+    auto manager = managerFor(mock);
+    const auto result = manager.enqueue({sampleUris().front()}, false);
+    mock.join();
+    require(!result.success && result.error_code == "mpd_add_outcome_unknown",
+            "lost addid reply must be reported as an unknown outcome");
+    require(!result.rollback_complete, "unknown add outcome cannot claim rollback completion");
+    require(mock.commands().size() == 1, "unknown add outcome must not issue destructive deleteid");
+}
+
+void testLostPlayReplyDoesNotDeletePossiblyCurrentSong() {
+    MockMpd mock(false, false, false, true);
+    auto manager = managerFor(mock);
+    const auto result = manager.enqueue({sampleUris().front()}, true);
+    mock.join();
+    require(!result.success && result.error_code == "mpd_play_now_outcome_unknown",
+            "lost playid reply must be reported as an unknown outcome");
+    require(!result.rollback_complete && result.queued == 1 && result.song_ids.size() == 1,
+            "known added ID must be retained for reconciliation");
+    require(mock.commands().size() == 2 && mock.commands()[1] == "playid 700",
+            "ambiguous playid must not be followed by deleteid");
+}
 void testInvalidProxyUriIsRejectedBeforeConnecting() {
     yoinks::MpdQueueManagerConfig config;
     config.port = 1;
@@ -186,6 +216,8 @@ int main() {
         testPlayNowStartsFirstNewSongOnlyWhenRequested();
         testAddFailureRollsBackOnlyNewEntries();
         testPlayNowRejectionRollsBackNewEntries();
+        testLostAddReplyIsReportedAsAmbiguousWithoutUnsafeRollback();
+        testLostPlayReplyDoesNotDeletePossiblyCurrentSong();
         testInvalidProxyUriIsRejectedBeforeConnecting();
         std::cout << "All MPD queue manager tests passed\n";
         return 0;
