@@ -326,8 +326,8 @@ void testCommandListAckAndMissingSeparatorAreRejected() {
 
 void testSnapshotResponseLineLimitIsEnforced() {
     std::string response;
-    for (std::size_t i = 0; i < 8320; ++i) response += "x\\n";
-    response += "list_OK\\nstate: stop\\nOK\\n";
+    for (std::size_t i = 0; i < 8320; ++i) response += "x\n";
+    response += "list_OK\nstate: stop\nOK\n";
     expectSnapshotFailure(response, "mpd_snapshot_response_too_large",
                           "snapshot response line limit must be enforced");
 }
