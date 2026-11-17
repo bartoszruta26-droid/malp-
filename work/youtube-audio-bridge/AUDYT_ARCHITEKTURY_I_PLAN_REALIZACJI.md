@@ -1097,7 +1097,7 @@ Obserwator oparty na `idle` jest asynchroniczny. Jeżeli MALP doda URL i natychm
 - [x] Potwierdzenie, że istniejący kod nie ma jeszcze obserwatora MPD.
 - [x] Zapisanie decyzji architektonicznej i warunków bezpieczeństwa.
 - [x] Zapisanie potwierdzonego przez użytkownika testu dźwięku ścieżki API.
-- [ ] Implementacja klienta MPD `idle` i snapshotu playlisty.
+- [x] Implementacja transportu `idle` oraz odczytowego snapshotu playlisty (integracja cyklu życia nadal oczekuje).
 - [ ] Testy wyścigów i idempotencji obserwatora.
 - [ ] Test potwierdzający, że docelowy MPD przyjmuje surowy URL YouTube jako wpis kolejki.
 - [ ] Implementacja bezpiecznej konwersji przyszłych wpisów.
@@ -1134,3 +1134,13 @@ Dodano testy protokołu dla zdarzenia playlisty, zdarzenia niezwiązanego z play
 - Dotychczasowa metoda listStreamSessionIds() pozostaje bez zmian. Nowa metoda nie mutuje playlisty, nie wywołuje playback i nie zmienia trybów MPD.
 - Dodano test integracyjny z atrapą MPD sprawdzający identyfikator, pozycję, URI, kolejność pól oraz status odtwarzacza. Wynik testu będzie potwierdzony przez kolejny przebieg CI.
 - Nadal nie ma integracji obserwatora z main.cpp, automatycznej konwersji URL YouTube ani wdrożenia na Raspberry Pi. Nie wykonano testu addid dla surowego URL YouTube na docelowym MPD; do czasu rozstrzygnięcia tej bramki watcher pozostaje nieaktywny.
+
+
+## Korekta CI i snapshotu — 2026-11-17
+
+- Przebieg CI dla commita `e5b0f8ae` wykrył błąd kompilacji: w `listPlaylistState()` pozostawiono drugi odczyt `status` i deklarację o tej samej nazwie. Nie był to błąd protokołu MPD ani testów, ponieważ kompilacja zatrzymała się przed uruchomieniem testów.
+- Usunięto redundantne polecenie `status`. Snapshot używa teraz wyłącznie jednej listy odczytowej: `command_list_ok_begin`, `playlistinfo`, `status`, `command_list_end`.
+- Parser rozdziela odpowiedź playlisty i statusu na separatorze `list_OK`, a następnie weryfikuje końcowe `OK`. Odpowiedzi ACK, przekroczenie limitu i niepełny protokół są zgłaszane jako błędy.
+- Poprawka zapisana w commicie `73155e5a61bbf0ac4510f5f4d870ffac3f001897`. CI dla tego commita jest uruchomione; do czasu zakończenia nie oznaczamy kompilacji ani testów jako zaliczonych.
+- Test atrapy MPD weryfikuje, że oba polecenia są wysyłane w jednej liście oraz że wynik zawiera `songid`, `Pos`, URI i stan odtwarzacza.
+- Nadal nie uruchomiono watchera w procesie usługi. Nie wykonano żadnej operacji na docelowej kolejce ani testu surowego URL YouTube przez `addid`.
