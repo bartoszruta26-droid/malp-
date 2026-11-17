@@ -75,6 +75,12 @@ if(YOINKS_MPD_BUILD_TESTS)
         $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic;-Werror>
     )
     add_test(NAME mpd_queue_manager COMMAND yoinks_mpd_queue_manager_tests)
+    add_executable(yoinks_mpd_lazy_session_tests tests/lazy_stream_session_registry_test.cpp)
+    target_link_libraries(yoinks_mpd_lazy_session_tests PRIVATE yoinks_mpd_core)
+    target_compile_options(yoinks_mpd_lazy_session_tests PRIVATE
+        $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic;-Werror>
+    )
+    add_test(NAME lazy_stream_session_registry COMMAND yoinks_mpd_lazy_session_tests)
     add_test(NAME http_api_integration
         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/http_api_test.sh $<TARGET_FILE:yoinks-mpd>)
 endif()
