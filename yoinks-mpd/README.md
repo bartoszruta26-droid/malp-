@@ -165,3 +165,6 @@ Niniejsza sekcja jest nadrzędna wobec wcześniejszych fragmentów tego dokument
 - Test mock MPD sprawdza kolejność komend wstawiania oraz to, że `playid` wskazuje pierwszy element żądanej playlisty. Przebieg CI `44060885397` zakończył się `success` (build i CTest).
 - Statusy API rozróżniają niedostępny MPD/limit sesji (503), timeout resolvera (504), pustą lub nieobsługiwaną playlistę (422) oraz pozostałe błędy upstream (502).
 - Najnowsze zmiany statusów HTTP wymagają zakończenia workflow `44060955448`; do tego czasu nie deklarować ich jako potwierdzonych.
+
+
+**Potwierdzenie CI po mapowaniu kodów HTTP:** run `44060955448` zakończył się `success` — konfiguracja, kompilacja, wszystkie 9 testów CTest oraz test HTTP z atrapą resolvera i niedostępnym MPD. Run `44061104082` dla dokumentacji i aktualnego drzewa również zakończył się `success`. Ostatni potwierdzony przebieg kodu obejmuje semantykę `play_now`, statusy HTTP, klienta API i poprawki cyklu życia sesji. Nie obejmuje testu na Raspberry Pi ani rzeczywistego odtwarzania.
