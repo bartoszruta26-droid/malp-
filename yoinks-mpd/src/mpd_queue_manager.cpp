@@ -30,6 +30,15 @@ bool validOpaqueId(const std::string& id) {
     return true;
 }
 
+bool parseUnsigned(const std::string& value, std::uint32_t& parsed) {
+    if (value.empty()) return false;
+    std::uint32_t candidate = 0;
+    const auto result = std::from_chars(value.data(), value.data() + value.size(), candidate);
+    if (result.ec != std::errc{} || result.ptr != value.data() + value.size()) return false;
+    parsed = candidate;
+    return true;
+}
+
 bool readLine(beast::tcp_stream& stream, asio::streambuf& buffer,
               std::string& line, std::chrono::steady_clock::time_point deadline) {
     const auto now = std::chrono::steady_clock::now();
@@ -85,13 +94,7 @@ bool parseSongId(const CommandReply& reply, std::uint32_t& id) {
     for (const auto& line : reply.lines) {
         constexpr char prefix[] = "Id: ";
         if (line.rfind(prefix, 0) != 0) continue;
-        const std::string value = line.substr(sizeof(prefix) - 1);
-        std::uint32_t parsed = 0;
-        const auto result = std::from_chars(value.data(), value.data() + value.size(), parsed);
-        if (result.ec == std::errc{} && result.ptr == value.data() + value.size()) {
-            id = parsed;
-            return true;
-        }
+        return parseUnsigned(line.substr(sizeof(prefix) - 1), id);
     }
     return false;
 }
@@ -164,9 +167,6 @@ MpdQueueResult MpdQueueManager::enqueue(const std::vector<std::string>& stream_u
     added_song_ids.reserve(stream_uris.size());
 
     for (std::size_t step = 0; step < stream_uris.size(); ++step) {
-        // Insert play-now entries at position zero in reverse order. The final
-        // MPD playlist then contains the requested block in its original order,
-        // ahead of the existing queue, without deleting or clearing old entries.
         const std::size_t index = play_now ? stream_uris.size() - 1 - step : step;
         std::string add_command = "addid \"" + stream_uris[index] + "\"";
         if (play_now) add_command += " 0";
@@ -205,8 +205,6 @@ MpdQueueResult MpdQueueManager::enqueue(const std::vector<std::string>& stream_u
             if (reply.rejected) {
                 result.rollback_complete = rollback(stream, buffer, result.song_ids, deadline);
             } else {
-                // The command may have started playback even if its reply was lost.
-                // Do not delete a possibly-current song on an ambiguous outcome.
                 result.rollback_complete = false;
             }
             result.error_code = reply.rejected ? "mpd_play_now_rejected"
@@ -256,6 +254,101 @@ MpdQueueSnapshot MpdQueueManager::listStreamSessionIds() const {
         if (line.rfind(file_prefix, 0) != 0) continue;
         const std::string uri = line.substr(sizeof(file_prefix) - 1);
         if (isAllowedStreamUri(uri)) result.stream_session_ids.push_back(uri.substr(prefix.size()));
+    }
+    result.success = true;
+    return result;
+}
+
+MpdPlaylistStateSnapshot MpdQueueManager::listPlaylistState() const {
+    MpdPlaylistStateSnapshot result;
+    const auto deadline = std::chrono::steady_clock::now()
+            + std::chrono::milliseconds(config_.operation_timeout_milliseconds);
+    asio::io_context context;
+    beast::tcp_stream stream{context};
+    stream.expires_after(std::chrono::milliseconds(config_.operation_timeout_milliseconds));
+    beast::error_code error;
+    stream.connect(tcp::endpoint{asio::ip::make_address(config_.host), config_.port}, error);
+    if (error) { result.error_code = "mpd_connect_failed"; return result; }
+
+    asio::streambuf buffer{1024 * 1024};
+    std::string greeting;
+    if (!readLine(stream, buffer, greeting, deadline) || greeting.rfind("OK MPD ", 0) != 0) {
+        result.error_code = "mpd_protocol_greeting_invalid";
+        return result;
+    }
+
+    const auto playlist = command(stream, buffer, "playlistinfo", deadline, 8192, 1024 * 1024);
+    if (!playlist.success) {
+        result.error_code = playlist.rejected ? "mpd_playlistinfo_rejected" : "mpd_playlistinfo_failed";
+        return result;
+    }
+
+    MpdPlaylistEntry entry;
+    bool have_entry = false;
+    bool have_id = false;
+    bool have_position = false;
+    const auto finish_entry = [&]() -> bool {
+        if (!have_entry) return true;
+        if (!have_id || !have_position || entry.uri.empty()) return false;
+        result.entries.push_back(entry);
+        entry = MpdPlaylistEntry{};
+        have_entry = false;
+        have_id = false;
+        have_position = false;
+        return true;
+    };
+
+    for (const auto& line : playlist.lines) {
+        constexpr char file_prefix[] = "file: ";
+        constexpr char id_prefix[] = "Id: ";
+        constexpr char pos_prefix[] = "Pos: ";
+        if (line.rfind(file_prefix, 0) == 0) {
+            if (!finish_entry()) { result.error_code = "mpd_playlist_entry_invalid"; return result; }
+            entry.uri = line.substr(sizeof(file_prefix) - 1);
+            have_entry = true;
+        } else if (line.rfind(id_prefix, 0) == 0 && have_entry) {
+            have_id = parseUnsigned(line.substr(sizeof(id_prefix) - 1), entry.song_id);
+            if (!have_id) { result.error_code = "mpd_playlist_entry_invalid"; return result; }
+        } else if (line.rfind(pos_prefix, 0) == 0 && have_entry) {
+            std::uint32_t position = 0;
+            have_position = parseUnsigned(line.substr(sizeof(pos_prefix) - 1), position);
+            if (!have_position) { result.error_code = "mpd_playlist_entry_invalid"; return result; }
+            entry.position = static_cast<std::size_t>(position);
+        }
+    }
+    if (!finish_entry()) { result.error_code = "mpd_playlist_entry_invalid"; return result; }
+
+    const auto status = command(stream, buffer, "status", deadline, 128, 16384);
+    if (!status.success) {
+        result.error_code = status.rejected ? "mpd_status_rejected" : "mpd_status_failed";
+        return result;
+    }
+    bool have_state = false;
+    for (const auto& line : status.lines) {
+        constexpr char state_prefix[] = "state: ";
+        constexpr char song_id_prefix[] = "songid: ";
+        if (line.rfind(state_prefix, 0) == 0) {
+            result.state = line.substr(sizeof(state_prefix) - 1);
+            have_state = result.state == "play" || result.state == "pause" || result.state == "stop";
+            if (!have_state) { result.error_code = "mpd_status_invalid"; return result; }
+        } else if (line.rfind(song_id_prefix, 0) == 0) {
+            std::uint32_t song_id = 0;
+            if (!parseUnsigned(line.substr(sizeof(song_id_prefix) - 1), song_id)) {
+                result.error_code = "mpd_status_invalid";
+                return result;
+            }
+            result.current_song_id = song_id;
+        }
+    }
+    if (!have_state || (result.state == "stop" && result.current_song_id.has_value())
+            || (result.state != "stop" && !result.current_song_id.has_value())) {
+        result.error_code = "mpd_status_invalid";
+        return result;
+    }
+    if (result.current_song_id.has_value()) {
+        const auto found = std::find_if(result.entries.begin(), result.entries.end(),
+            [&result](const MpdPlaylistEntry& item) { return item.song_id == *result.current_song_id; });
+        if (found == result.entries.end()) { result.error_code = "mpd_status_song_missing"; return result; }
     }
     result.success = true;
     return result;

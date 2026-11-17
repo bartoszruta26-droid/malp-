@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -27,17 +28,31 @@ struct MpdQueueResult {
     std::string error_code;
 };
 
-/**
- * Appends only trusted local proxy URIs to MPD. It never clears the queue
- * or changes repeat/random/single/consume. play_now starts the first newly
- * added song only when explicitly requested.
- */
 struct MpdQueueSnapshot {
     bool success{false};
     std::vector<std::string> stream_session_ids;
     std::string error_code;
 };
 
+struct MpdPlaylistEntry {
+    std::uint32_t song_id{0};
+    std::size_t position{0};
+    std::string uri;
+};
+
+struct MpdPlaylistStateSnapshot {
+    bool success{false};
+    std::vector<MpdPlaylistEntry> entries;
+    std::string state;
+    std::optional<std::uint32_t> current_song_id;
+    std::string error_code;
+};
+
+/**
+ * Appends only trusted local proxy URIs to MPD. It never clears the queue
+ * or changes repeat/random/single/consume. play_now starts the first newly
+ * added song only when explicitly requested.
+ */
 class MpdQueueManager final {
 public:
     explicit MpdQueueManager(MpdQueueManagerConfig config = {});
@@ -45,6 +60,7 @@ public:
     MpdQueueResult enqueue(const std::vector<std::string>& stream_uris,
                            bool play_now) const;
     MpdQueueSnapshot listStreamSessionIds() const;
+    MpdPlaylistStateSnapshot listPlaylistState() const;
 
     bool isAllowedStreamUri(const std::string& uri) const;
 

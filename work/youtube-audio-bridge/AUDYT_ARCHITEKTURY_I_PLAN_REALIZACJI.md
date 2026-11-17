@@ -1122,3 +1122,15 @@ Dodano izolowany, jednorazowy komponent `MpdPlaylistWatcher`:
 Dodano testy protokołu dla zdarzenia playlisty, zdarzenia niezwiązanego z playlistą oraz odrzucenia zdalnego hosta.
 
 **Ograniczenie etapu:** komponent nie jest jeszcze podłączony do `main.cpp` i nie konwertuje URL. To celowe: najpierw weryfikujemy zachowanie protokołu bez aktywowania automatycznej ingerencji w produkcyjną kolejkę. Następny etap obejmuje pełny snapshot `playlistinfo` + `status`, cykl życia subskrypcji oraz testy wyścigów przed jakąkolwiek podmianą wpisu.
+
+
+## Aktualizacja 2026-11-17 — pełny, odczytowy snapshot playlisty MPD
+
+- CI dla d4f25d70b04e2e706af09fbaae49507ee115f26d zakończyło się sukcesem; wszystkie kroki build, CTest oraz kompilacja i testy ASan/UBSan w GitHub Actions mają status success.
+- Dodano do MpdQueueManager metodę listPlaylistState(). Korzysta z osobnego, zwykłego połączenia MPD (nigdy z połączenia idle) i wykonuje wyłącznie playlistinfo oraz status.
+- Wynik zawiera osobne wpisy playlisty: song_id, position, uri, a także state i opcjonalny current_song_id.
+- Parser nie zakłada kolejności pól Id: i Pos: w obrębie wpisu. Odrzuca niekompletne wpisy, niepoprawne liczby, nieznany stan MPD oraz identyfikator bieżącego utworu, którego nie ma w odczytanej playliście.
+- Stan play i pause wymaga songid; stan stop nie może zawierać bieżącego songid. Pusta playlista ze stanem stop jest poprawnym wynikiem.
+- Dotychczasowa metoda listStreamSessionIds() pozostaje bez zmian. Nowa metoda nie mutuje playlisty, nie wywołuje playback i nie zmienia trybów MPD.
+- Dodano test integracyjny z atrapą MPD sprawdzający identyfikator, pozycję, URI, kolejność pól oraz status odtwarzacza. Wynik testu będzie potwierdzony przez kolejny przebieg CI.
+- Nadal nie ma integracji obserwatora z main.cpp, automatycznej konwersji URL YouTube ani wdrożenia na Raspberry Pi. Nie wykonano testu addid dla surowego URL YouTube na docelowym MPD; do czasu rozstrzygnięcia tej bramki watcher pozostaje nieaktywny.

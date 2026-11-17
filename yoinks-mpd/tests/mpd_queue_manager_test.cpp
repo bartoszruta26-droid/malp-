@@ -89,7 +89,9 @@ private:
                 } else if (line == "playlistinfo") {
                     send(socket,
                         "file: http://127.0.0.1:8788/stream/0123456789abcdef0123456789abcdef\n"
-                        "Pos: 0\nId: 700\nOK\n");
+                        "Id: 700\nPos: 0\nTitle: Test track\nOK\n");
+                } else if (line == "status") {
+                    send(socket, "songid: 700\nstate: play\nOK\n");
                 } else {
                     send(socket, "ACK [5@0] {unknown} unsupported test command\n");
                 }
@@ -217,6 +219,25 @@ void testPlaylistSnapshotReturnsOnlyTrustedProxySessions() {
             "session reconciliation must use a read-only MPD command");
 }
 
+
+void testFullPlaylistStateIncludesStableIdsPositionsAndPlayerStatus() {
+    MockMpd mock;
+    auto manager = managerFor(mock);
+    const auto snapshot = manager.listPlaylistState();
+    mock.join();
+    require(snapshot.success, "full playlist snapshot should succeed");
+    require(snapshot.entries.size() == 1, "snapshot should contain one playlist entry");
+    require(snapshot.entries.front().song_id == 700
+            && snapshot.entries.front().position == 0
+            && snapshot.entries.front().uri == sampleUris().front(),
+            "snapshot should preserve song ID, position and URI");
+    require(snapshot.state == "play" && snapshot.current_song_id == 700,
+            "snapshot should include current player state and song ID");
+    require(mock.commands().size() == 2 && mock.commands()[0] == "playlistinfo"
+            && mock.commands()[1] == "status",
+            "snapshot must use read-only playlistinfo and status commands");
+}
+
 void testInvalidProxyUriIsRejectedBeforeConnecting() {
     yoinks::MpdQueueManagerConfig config;
     config.port = 1;
@@ -240,6 +261,7 @@ int main() {
         testLostAddReplyIsReportedAsAmbiguousWithoutUnsafeRollback();
         testLostPlayReplyDoesNotDeletePossiblyCurrentSong();
         testPlaylistSnapshotReturnsOnlyTrustedProxySessions();
+        testFullPlaylistStateIncludesStableIdsPositionsAndPlayerStatus();
         testInvalidProxyUriIsRejectedBeforeConnecting();
         std::cout << "All MPD queue manager tests passed\n";
         return 0;
