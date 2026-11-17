@@ -157,3 +157,14 @@ All six reported cases passed: binary FIFO transfer and cleanup; playlist reject
 - Production service remained `active/running`, `NRestarts=0`; production binary SHA-256 remained `21bbe326959062c7d036a5f069bcd6dca7de0a02eccb0ee3a048d9c6eadbf8f8`. No production binary installation, service restart, MPD queue change, or playback intervention occurred.
 - These tests prove the targeted registry lifecycle behavior under deterministic scheduling. They do not establish live YouTube/CDN playback, audible hardware output, or the full DNS/SSRF threat model.
 
+## Verification addendum — retainOnly() unpublished activation and slot accounting (2026-11-17)
+
+- Corrected the lifecycle regression test's live-ID set. The test now calls `retainOnly({second_id})`, so the in-flight first session must be retained while the second, inactive session is a valid live queue entry. The prior empty set correctly caused the inactive second session to be pruned; the earlier test expectation of `removed == 0` was therefore invalid.
+- Commit: `6e880cb9e5a15014a5e3e290bb019548147d23ba` (`Correct retainOnly lifecycle test live queue set`).
+- The test also verifies that the second activation cannot exceed `maximum_active_streams = 1`, then that releasing the first stream frees the slot for the second.
+- User-reported Raspberry Pi build succeeded; the targeted executable reported `All lazy stream session tests passed`.
+- User-reported full CTest on the Raspberry Pi: **11/11 passed**, including `lazy_stream_session_registry`, HTTP API integration, HTTP byte-stream integration, and `real_mpd_http_proxy_playback`; total 5.17 seconds.
+- Raspberry Pi checkout reported clean `git status --short`, with HEAD and origin both at `6e880cb9`.
+- GitHub Actions run `44118536311` for the exact commit `6e880cb9e5a15014a5e3e290bb019548147d23ba` completed successfully.
+- This closes the specific `retainOnly()` test gate. It does not independently establish live YouTube/CDN retrieval, audible hardware output, or RAM-only/no-persistent-storage behavior. No production binary installation, service restart, MPD queue change, or playback intervention was performed as part of this verification.
+
