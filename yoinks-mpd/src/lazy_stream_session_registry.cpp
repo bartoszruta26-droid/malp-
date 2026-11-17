@@ -213,6 +213,9 @@ void LazyStreamSessionRegistry::shutdown() {
             return;
         }
         shutting_down_ = true;
+        if (config_.after_shutdown_flag_set_for_tests) {
+            config_.after_shutdown_flag_set_for_tests();
+        }
         for (auto& item : sessions_) {
             if (item.second.cancellation) item.second.cancellation->store(true);
         }
