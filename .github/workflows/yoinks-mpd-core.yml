@@ -31,13 +31,14 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake g++ libboost-dev nlohmann-json3-dev libcurl4-openssl-dev openssl
+          sudo apt-get install -y cmake g++ libboost-dev nlohmann-json3-dev libcurl4-openssl-dev openssl mpd mpc
       - name: Verify installer shell syntax
         run: |
           bash -n scripts/yoinks-mpd/install.sh
           bash -n scripts/yoinks-mpd/diagnose-mpd-http.sh
           bash -n yoinks-mpd/tests/http_api_test.sh
           bash -n yoinks-mpd/tests/http_stream_test.sh
+          bash -n yoinks-mpd/tests/http_mpd_daemon_test.sh
           bash scripts/yoinks-mpd/install.sh --help
           sed -e 's#^ExecStart=.*#ExecStart=/bin/true#' -e 's#^EnvironmentFile=.*#EnvironmentFile=/dev/null#' scripts/yoinks-mpd/yoinks-mpd.service > /tmp/yoinks-mpd.service
           systemd-analyze verify /tmp/yoinks-mpd.service
