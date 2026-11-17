@@ -356,10 +356,12 @@ MpdPlaylistStateSnapshot MpdQueueManager::listPlaylistState() const {
             if (!finish_entry()) { result.error_code = "mpd_playlist_entry_invalid"; return result; }
             entry.uri = line.substr(sizeof(file_prefix) - 1);
             have_entry = true;
-        } else if (line.rfind(id_prefix, 0) == 0 && have_entry) {
+        } else if (line.rfind(id_prefix, 0) == 0) {
+            if (!have_entry) { result.error_code = "mpd_playlist_entry_invalid"; return result; }
             have_id = parseUnsigned(line.substr(sizeof(id_prefix) - 1), entry.song_id);
             if (!have_id) { result.error_code = "mpd_playlist_entry_invalid"; return result; }
-        } else if (line.rfind(pos_prefix, 0) == 0 && have_entry) {
+        } else if (line.rfind(pos_prefix, 0) == 0) {
+            if (!have_entry) { result.error_code = "mpd_playlist_entry_invalid"; return result; }
             std::uint32_t position = 0;
             have_position = parseUnsigned(line.substr(sizeof(pos_prefix) - 1), position);
             if (!have_position) { result.error_code = "mpd_playlist_entry_invalid"; return result; }
