@@ -384,7 +384,7 @@ void testRetainOnlyPreservesUnpublishedActivationAndSlotAccounting() {
     // destroy a joinable std::thread and mask the actual assertion with terminate.
     const bool unpublished_slot_reserved =
             registry.activeCount() == 1 && registry.contains(first_id);
-    const auto removed = registry.retainOnly({});
+    const auto removed = registry.retainOnly({second_id});
     const bool retain_only_preserved =
             registry.contains(first_id) && registry.activeCount() == 1;
     const bool second_activated_early = registry.activate(second_id,
