@@ -23,6 +23,8 @@ struct LazyStreamSessionRegistryConfig {
     std::size_t maximum_sessions{200};
     std::size_t maximum_active_streams{2};
     HttpUpstreamConfig upstream{};
+    // Deterministic lifecycle-race seam; unset in production.
+    std::function<void()> after_upstream_start_for_tests;
 };
 
 /**
