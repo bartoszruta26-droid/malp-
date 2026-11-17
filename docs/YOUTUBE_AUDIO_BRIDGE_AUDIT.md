@@ -229,3 +229,6 @@ All six reported cases passed: binary FIFO transfer and cleanup; playlist reject
 - Do not implement a hostname-only workaround or disable TLS verification. The remediation design must validate every resolved address and ensure the connection uses only an address that passed validation, while preserving the original hostname for SNI and certificate verification. IPv4, IPv6, IPv4-mapped IPv6, special-purpose ranges, multiple A/AAAA answers, and DNS rebinding must be considered.
 - Existing integration tests intentionally use a loopback TLS fixture through the test-only `CURLOPT_CONNECT_TO` override. Any production address policy must make this test override explicitly test-only and must not create a production bypass.
 - No DNS/SSRF code change has been made yet. The next work is a test-first design and adversarial resolver/connection tests.
+
+
+- Follow-up diagnostic commit `7695163c` adds phase markers around each shutdown/mutation race (`release`, `erase`, `clear`, `retainOnly`), including racer release, mutation/shutdown entry, create-gate check, and worker joins. This will localize whether the sanitizer hang is in the synchronization barrier, the 100,000-iteration create probe, or thread joining. No production implementation was changed in this diagnostic step.
