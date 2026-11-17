@@ -39,7 +39,7 @@ public:
     MpdQueueResult enqueue(const std::vector<std::string>& stream_uris,
                            bool play_now) const;
 
-    bool isAllowedStreamUri(const std::string& uri) const noexcept;
+    bool isAllowedStreamUri(const std::string& uri) const;
 
 private:
     MpdQueueManagerConfig config_;
