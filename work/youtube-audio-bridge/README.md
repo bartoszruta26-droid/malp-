@@ -61,4 +61,6 @@ Repository-side inspection is not a substitute for compiling or running the serv
 - Added a read-only Raspberry Pi diagnostic: `scripts/yoinks-mpd/diagnose-mpd-http.sh`.
 - Added the procedure: `docs/yoinks-mpd/MPD_HTTP_INPUT_DIAGNOSTIC.md`.
 - W1 remains **open pending target-device evidence**. The diagnostic script has not been run on the Raspberry Pi in this environment, and no successful HTTP playback is claimed.
-- W2 API contract v1 was added at `docs/yoinks-mpd/API_CONTRACT_V1.md`; this is a specification only, not a running API.
+- W2 API contract v1 is specified at `docs/yoinks-mpd/API_CONTRACT_V1.md`; Android now posts to `/api/v1/queue` and expects a confirmed queue result, not `stream_url`.
+- W3 has started: C++17 CMake core and fixed-capacity RAM stream buffer added under `yoinks-mpd/`, with unit tests and a GitHub Actions workflow. The core is not an HTTP proxy or running API yet.
+- Android bridge token storage now uses AES-GCM with an AES key wrapped by an RSA key pair in Android Keystore; legacy plaintext token preference is removed on access.
