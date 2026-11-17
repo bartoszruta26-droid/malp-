@@ -4,6 +4,7 @@
  */
 #include "yoinks/lazy_stream_session_registry.hpp"
 #include <atomic>
+#include <chrono>
 #include <exception>
 #include <iostream>
 #include <stdexcept>
@@ -26,7 +27,7 @@ void testRegistrationDoesNotResolveOrStartMedia() {
 
 void testInvalidVideoIdsAreRejected() {
     yoinks::LazyStreamSessionRegistry registry;
-    require(registry.create("not-a-video-id") .empty(), "invalid video ID must be rejected");
+    require(registry.create("not-a-video-id").empty(), "invalid video ID must be rejected");
     require(registry.size() == 0, "invalid ID must not consume a session slot");
 }
 
