@@ -27,6 +27,8 @@ import java.util.regex.Pattern;
 public final class YouTubeShareParser {
     private static final Pattern URL_PATTERN = Pattern.compile(
             "(?i)https?://[^\\s<>\\\"']+");
+    private static final Pattern VIDEO_ID_PATTERN = Pattern.compile("[A-Za-z0-9_-]{11}");
+    private static final Pattern PLAYLIST_ID_PATTERN = Pattern.compile("[A-Za-z0-9_-]{10,128}");
     private static final List<String> ALLOWED_HOSTS;
 
     static {
@@ -36,7 +38,6 @@ public final class YouTubeShareParser {
         hosts.add("m.youtube.com");
         hosts.add("music.youtube.com");
         hosts.add("youtu.be");
-        hosts.add("www.youtube.com");
         ALLOWED_HOSTS = Collections.unmodifiableList(hosts);
     }
 
@@ -82,16 +83,21 @@ public final class YouTubeShareParser {
                 return null;
             }
 
-            boolean validPath = false;
-            if ("youtu.be".equals(host) || "www.youtu.be".equals(host)) {
-                validPath = uri.getPath() != null && uri.getPath().length() > 1;
+            String path = uri.getPath() == null ? "" : uri.getPath();
+            boolean validPath;
+            if ("youtu.be".equals(host)) {
+                validPath = isVideoId(path.startsWith("/") ? path.substring(1) : path);
+            } else if ("/watch".equals(path)) {
+                validPath = isVideoId(uri.getQueryParameter("v"));
+            } else if ("/playlist".equals(path)) {
+                validPath = isPlaylistId(uri.getQueryParameter("list"));
             } else {
-                String path = uri.getPath() == null ? "" : uri.getPath();
-                validPath = "/watch".equals(path)
-                        || path.startsWith("/playlist")
-                        || path.startsWith("/shorts/")
-                        || path.startsWith("/live/")
-                        || path.startsWith("/embed/");
+                List<String> segments = uri.getPathSegments();
+                validPath = segments.size() == 2
+                        && ("shorts".equals(segments.get(0))
+                            || "live".equals(segments.get(0))
+                            || "embed".equals(segments.get(0)))
+                        && isVideoId(segments.get(1));
             }
             if (!validPath) {
                 return null;
@@ -100,6 +106,14 @@ public final class YouTubeShareParser {
         } catch (RuntimeException ignored) {
             return null;
         }
+    }
+
+    private static boolean isVideoId(String value) {
+        return value != null && VIDEO_ID_PATTERN.matcher(value).matches();
+    }
+
+    private static boolean isPlaylistId(String value) {
+        return value != null && PLAYLIST_ID_PATTERN.matcher(value).matches();
     }
 
     private static String trimTrailingPunctuation(String value) {
