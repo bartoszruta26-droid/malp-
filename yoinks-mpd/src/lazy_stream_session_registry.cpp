@@ -62,20 +62,36 @@ std::string LazyStreamSessionRegistry::create(const std::string& video_id) {
 bool LazyStreamSessionRegistry::activate(const std::string& id, const ResolveAudioUrl& resolver) {
     std::string video_id;
     std::shared_ptr<std::atomic_bool> cancellation;
+    std::shared_ptr<HttpUpstreamStream> previous;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         const auto found = sessions_.find(id);
-        if (found == sessions_.end() || found->second.activating || found->second.failed) return false;
-        if (found->second.stream) return true;
+        if (found == sessions_.end() || found->second.activating || found->second.serving) return false;
+
+        if (found->second.stream
+                && found->second.stream->state() == UpstreamState::running) {
+            found->second.serving = true;
+            return true;
+        }
+
         std::size_t active = 0;
         for (const auto& item : sessions_) {
-            if (item.second.stream || item.second.activating) ++active;
+            if (item.first == id) continue;
+            if (item.second.activating
+                    || (item.second.stream
+                        && item.second.stream->state() == UpstreamState::running)) {
+                ++active;
+            }
         }
         if (active >= config_.maximum_active_streams) return false;
+
+        previous = std::move(found->second.stream);
         found->second.activating = true;
+        found->second.failed = false;
         video_id = found->second.video_id;
         cancellation = found->second.cancellation;
     }
+    if (previous) previous->wait();
 
     std::string source_url;
     bool resolved = false;
@@ -84,7 +100,10 @@ bool LazyStreamSessionRegistry::activate(const std::string& id, const ResolveAud
     if (!resolved || !HttpUpstreamStream::isAllowedResolvedUrl(source_url)) {
         std::lock_guard<std::mutex> lock(mutex_);
         const auto found = sessions_.find(id);
-        if (found != sessions_.end()) { found->second.activating = false; found->second.failed = true; }
+        if (found != sessions_.end()) {
+            found->second.activating = false;
+            found->second.failed = true;
+        }
         return false;
     }
 
@@ -92,7 +111,10 @@ bool LazyStreamSessionRegistry::activate(const std::string& id, const ResolveAud
     if (!stream->start(source_url)) {
         std::lock_guard<std::mutex> lock(mutex_);
         const auto found = sessions_.find(id);
-        if (found != sessions_.end()) { found->second.activating = false; found->second.failed = true; }
+        if (found != sessions_.end()) {
+            found->second.activating = false;
+            found->second.failed = true;
+        }
         return false;
     }
 
@@ -106,6 +128,8 @@ bool LazyStreamSessionRegistry::activate(const std::string& id, const ResolveAud
         }
         found->second.stream = std::move(stream);
         found->second.activating = false;
+        found->second.failed = false;
+        found->second.serving = true;
     }
     return true;
 }
@@ -152,6 +176,19 @@ bool LazyStreamSessionRegistry::isFailed(const std::string& id) const {
     return found != sessions_.end() && found->second.failed;
 }
 
+bool LazyStreamSessionRegistry::release(const std::string& id, bool cancel_upstream) {
+    std::shared_ptr<HttpUpstreamStream> stream;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        const auto found = sessions_.find(id);
+        if (found == sessions_.end()) return false;
+        found->second.serving = false;
+        if (cancel_upstream) stream = found->second.stream;
+    }
+    if (stream) stream->cancel();
+    return true;
+}
+
 std::size_t LazyStreamSessionRegistry::size() const {
     std::lock_guard<std::mutex> lock(mutex_); return sessions_.size();
 }
@@ -159,7 +196,10 @@ std::size_t LazyStreamSessionRegistry::size() const {
 std::size_t LazyStreamSessionRegistry::activeCount() const {
     std::lock_guard<std::mutex> lock(mutex_);
     std::size_t count = 0;
-    for (const auto& item : sessions_) if (item.second.stream || item.second.activating) ++count;
+    for (const auto& item : sessions_) {
+        if (item.second.activating || (item.second.stream
+                && item.second.stream->state() == UpstreamState::running)) ++count;
+    }
     return count;
 }
 
