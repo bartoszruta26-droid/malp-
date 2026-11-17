@@ -856,3 +856,17 @@ Wcześniejszy przebieg dla commita `c8086b7...` nie przeszedł kompilacji z powo
 2. Dodać odświeżanie URL źródłowego po wygaśnięciu/odrzuceniu źródła, bez automatycznego przekierowania poza allowlistę `googlevideo.com`.
 3. Dopiero po testach sesji połączyć resolver → registry → MpdQueueManager w `POST /api/v1/queue`; do tego czasu endpoint pozostaje fail-closed 503.
 4. Uzyskać kontrolowany raport MPD CURL z Raspberry Pi przed aktywacją produkcyjnego odtwarzania.
+
+## Aktualizacja — leniwe sesje strumieniowe (2026-11-17, CI w toku)
+
+Utworzono `LazyStreamSessionRegistry` (`include/yoinks/lazy_stream_session_registry.hpp`, `src/lazy_stream_session_registry.cpp`). Rejestr przechowuje wyłącznie 11-znakowy YouTube video ID i losowy 128-bitowy identyfikator sesji. Rejestracja pozycji nie wywołuje yt-dlp, nie rozwiązuje URL CDN, nie tworzy `HttpUpstreamStream` i nie alokuje bufora audio. Resolver jest wywoływany dopiero przy `activate()` obsługującym żądanie konkretnego strumienia.
+
+Limity: maksymalnie 200 wpisów playlisty, maksymalnie 2 jednocześnie aktywowane/aktywne źródła, łączny limit buforów aktywnych strumieni 8 MiB. Weryfikacja video ID oraz allowlista URL `googlevideo.com` są egzekwowane przed startem upstreamu. Współbieżne żądania aktywacji tej samej sesji są single-flight; drugie żądanie nie uruchamia drugiego procesu yt-dlp.
+
+Anulowanie: każda sesja ma współdzielony `atomic_bool`, przekazywany callbackowi resolvera. `erase()` i `clear()` ustawiają flagę, co pozwala przerwać proces yt-dlp przez już istniejący mechanizm anulowania resolvera. Po usunięciu sesji aktywacja nie może odtworzyć wpisu ani pozostawić aktywnego upstreamu.
+
+Testy `lazy_stream_session_registry` obejmują brak eager resolution, odrzucenie błędnego video ID, odrzucenie nieautoryzowanego hosta, single-flight, anulowanie resolvera podczas `erase()` oraz walidację limitów RAM/sesji.
+
+Commit testów `c49b9a8c9b00ca8647cd867f2e3c7926422ead38` uruchomił GitHub Actions run `44052224469`. Ostatni odczyt: `build-and-test` nadal `in_progress`, konfiguracja CMake zakończona sukcesem, kompilacja w toku. Nie oznaczać etapu jako zaliczonego, dopóki CI nie zakończy kompilacji i CTest.
+
+Komponent pozostaje izolowany: `HttpServer` i `POST /api/v1/queue` nie są jeszcze podłączone do leniwego rejestru. Stary aktywny `StreamSessionRegistry` nadal obsługuje istniejący testowy endpoint. Nie wykonano testu na Raspberry Pi ani nie zmieniano kolejki MPD.
