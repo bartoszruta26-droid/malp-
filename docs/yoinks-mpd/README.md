@@ -1,6 +1,6 @@
 # Yoinks-MPD: YouTube audio to an existing MPD server
 
-Status: **experimental design and producer prototype; end-to-end playback is not yet verified**.
+Status: **experimental design and producer prototype; end-to-end playback is not yet verified**. The selected target architecture is a local C++ HTTP relay consumed by MPD's CURL input plugin. FIFO remains a producer-only prototype, not the target transport.
 
 ## Goal
 
@@ -15,42 +15,43 @@ The existing MPD daemon and MALP control connection remain in place. This work m
 | MALP (Android) | Receive ACTION_SEND / ACTION_SEND_MULTIPLE, validate YouTube links, select queue action, send request to Pi |
 | Yoinks-MPD | Orchestrate a request, playlist enumeration, process lifecycle, cancellation and status |
 | yt-dlp | Resolve metadata and fetch the selected source audio; binary media output goes to stdout |
-| Bash / C++ | Glue, process supervision, FIFO lifecycle, MPD protocol integration and tests |
+| C++ / Bash | HTTP relay, process supervision, MPD protocol integration, diagnostics and tests |
 | MPD | Continue to own playback, outputs, volume, status and queue |
 
 The original Yoinks terminal UI is not a streaming daemon. Do not assume its current interactive workflow supports stdout piping or playlist-to-MPD queue insertion. The integration layer in this repository is named Yoinks-MPD and must be implemented explicitly.
 
-## Data path
+## Target data path
 
-Intended producer path:
+The selected target path is:
 
 ```text
-YouTube URL
-   -> Yoinks-MPD request handler
-   -> yt-dlp (metadata / best compatible source format)
-   -> stdout (binary audio bytes only)
-   -> named FIFO (bounded kernel pipe buffer)
-   -> MPD input path (only if verified for the installed MPD build)
-   -> existing MPD outputs
+MALP Android share
+   -> authenticated Yoinks-MPD control API (Raspberry Pi)
+   -> yt-dlp metadata / source URL resolution (no media download)
+   -> C++ local HTTP relay with bounded RAM buffer and back-pressure
+   -> MPD CURL input plugin using a stable local URI
+   -> existing MPD outputs / DAC
 ```
 
-A FIFO is not a media file. It carries bytes between processes and has a bounded kernel buffer. The producer blocks when the reader is slower and resumes when the reader consumes data. This provides back-pressure and avoids an application-managed full-file cache.
+MPD queue entries must contain stable local relay URIs, never expiring YouTube CDN URLs. The relay resolves the upstream source on demand and streams bytes progressively. It must not spool media to a file, cache directory, temporary file, or persistent volume.
 
-## Critical MPD compatibility finding
+The repository's yt-dlp-to-fifo.sh remains a narrowly scoped producer prototype and offline test target. It does not establish a working MPD input path and is not the selected end-state architecture.
 
-Do not confuse MPD's `pipe` **output** plugin with an input pipe. The documented `pipe` output plugin starts a command and writes decoded PCM to that command's standard input. The `fifo` output plugin similarly writes raw PCM from MPD to a FIFO. Neither is an input mechanism for YouTube bytes.
+## MPD input compatibility gate
 
-The documented MPD input plugin list includes local-file and network inputs, but does not document a general-purpose stdin/FIFO input plugin. The Bash producer script therefore demonstrates only the yt-dlp-to-FIFO producer side. Before connecting it to MPD, test whether the exact MPD build can open and decode a FIFO exposed as a local file. If it cannot, stop: do not claim that `mpc add /path/to/fifo` works.
+MPD's documented pipe and fifo plugins are **outputs**: they send decoded PCM from MPD to a command or FIFO. They are not generic inputs for feeding YouTube audio into MPD. Do not use mpc add /path/to/fifo unless that exact behavior has been demonstrated on the target build.
 
-If the installed MPD cannot consume a FIFO, the acceptable next choices are:
-1. a small native C++ MPD input plugin (requires building/maintaining a compatible MPD plugin and is a larger integration); or
-2. a local HTTP streaming endpoint consumed through MPD's documented CURL input plugin.
+The selected approach is a local HTTP endpoint consumed by MPD's CURL input plugin. Before implementing the relay, verify on the exact Raspberry Pi installation:
 
-The second choice is a fallback only. It is not the requested direct FIFO path and must be discussed before changing the selected architecture.
+1. mpd --version reports CURL input support (record the complete output).
+2. The running MPD instance can open and decode a known-good local HTTP audio URI.
+3. Actual request behavior (GET, HEAD, Range, reconnect and seek) is recorded.
+4. The exact codec/container is supported by the installed decoder build.
+5. The test does not modify or clear the user's existing MPD queue.
 
-References:
-- MPD plugin reference: https://mpd.readthedocs.io/en/stable/plugins.html
-- MPD user manual: https://mpd.readthedocs.io/en/stable/user.html
+Run scripts/yoinks-mpd/diagnose-mpd-http.sh and follow MPD_HTTP_INPUT_DIAGNOSTIC.md. The script is evidence collection only; a successful version check is not a playback test.
+
+If CURL input is absent, stop. Decide explicitly whether to update/rebuild MPD with CURL support or maintain a native C++ MPD input plugin. Do not silently revert to FIFO and do not claim compatibility without a recorded target-device playback test.
 
 ## Audio format and quality policy
 
@@ -86,7 +87,7 @@ The current Bash prototype is intentionally single-item only. Playlist orchestra
 - Do not write media to Downloads, cache directories, temporary files, logs, shell variables or command output. Metadata and diagnostic logs may be stored separately; never log authorization tokens or full private URLs.
 - Keep stdout exclusively for binary audio. Send diagnostics to stderr.
 
-## Bash producer prototype
+## FIFO producer prototype (non-target transport)
 
 See [yt-dlp-to-fifo.sh](../../scripts/yoinks-mpd/yt-dlp-to-fifo.sh).
 
