@@ -37,7 +37,7 @@ void testSuccessfulQueueIsLazyAndOrdered() {
             received = uris; play_now = requested_play_now;
             yoinks::MpdQueueResult result; result.success = true; result.queued = uris.size();
             return result;
-        }});
+        }, {}});
     const auto result = service.enqueue("https://youtu.be/abcdefghijk", false);
     require(result.success && result.queued == 3, "successful playlist must be reported");
     require(received.size() == 3 && !play_now, "all proxy URIs must preserve order and mode");
@@ -132,7 +132,7 @@ void testPlaylistLimitAndMetadataFailure() {
     auto sessions = std::make_shared<yoinks::LazyStreamSessionRegistry>();
     yoinks::YoutubeQueueService too_many({8788, 200, sessions,
         [](const std::string&) { return metadata(201); },
-        [](const std::vector<std::string>&, bool) { return yoinks::MpdQueueResult{}; }});
+        [](const std::vector<std::string>&, bool) { return yoinks::MpdQueueResult{}; }, {}});
     auto result = too_many.enqueue("https://youtu.be/abcdefghijk", false);
     require(!result.success && result.error_code == "invalid_entry_count",
             "playlist above 200 must be rejected");
