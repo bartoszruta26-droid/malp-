@@ -54,7 +54,7 @@ std::string LazyStreamSessionRegistry::create(const std::string& video_id) {
     if (sessions_.size() >= config_.maximum_sessions) return {};
     for (unsigned attempt = 0; attempt < 4; ++attempt) {
         const auto id = generateId();
-        if (sessions_.emplace(id, Entry{video_id, nullptr, false, false, false, std::make_shared<std::atomic_bool>(false)}).second) return id;
+        if (sessions_.emplace(id, Entry{video_id, nullptr, false, false, false, false, std::make_shared<std::atomic_bool>(false)}).second) return id;
     }
     return {};
 }
@@ -68,7 +68,7 @@ bool LazyStreamSessionRegistry::activate(const std::string& id, const ResolveAud
         const auto found = sessions_.find(id);
         if (found == sessions_.end() || found->second.activating || found->second.serving) return false;
 
-        if (found->second.stream
+        if (found->second.stream && !found->second.refresh_required
                 && found->second.stream->state() == UpstreamState::running) {
             found->second.serving = true;
             return true;
@@ -86,6 +86,7 @@ bool LazyStreamSessionRegistry::activate(const std::string& id, const ResolveAud
         if (active >= config_.maximum_active_streams) return false;
 
         previous = std::move(found->second.stream);
+        found->second.refresh_required = false;
         found->second.activating = true;
         found->second.failed = false;
         video_id = found->second.video_id;
@@ -183,7 +184,10 @@ bool LazyStreamSessionRegistry::release(const std::string& id, bool cancel_upstr
         const auto found = sessions_.find(id);
         if (found == sessions_.end()) return false;
         found->second.serving = false;
-        if (cancel_upstream) stream = found->second.stream;
+        if (cancel_upstream) {
+            found->second.refresh_required = true;
+            stream = found->second.stream;
+        }
     }
     if (stream) stream->cancel();
     return true;
