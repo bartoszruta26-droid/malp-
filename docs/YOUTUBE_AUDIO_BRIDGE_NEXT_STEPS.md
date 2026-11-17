@@ -55,3 +55,57 @@ Do not silently switch to HTTP while claiming the requested FIFO architecture.
 ## GitHub repository configuration note
 
 GitHub Issues are disabled for this repository (create-issue API returned HTTP 410), so this file records the work plan directly on the existing feature branch instead of creating an issue.
+
+
+## Additional upstream comparison (2026-11-17)
+
+### pbnoxious/yt2mpd
+
+Inspected `README.md`, `pyproject.toml`, `yt2mpd/config.py`, `yt2mpd/yt2mpd.py`, and its sample configuration.
+
+- GPL-3.0-or-later.
+- Uses yt-dlp to extract audio and download/convert it into a temporary subdirectory inside MPD's music directory.
+- Runs `mpc update`, then adds resulting local files with `mpc add`.
+- Supports video URLs and playlist URLs; playlist items become separate downloaded files.
+- Optional cleanup/pruning removes temporary files after they leave the queue.
+- Not a streaming solution: it stores full converted audio files before adding them to MPD.
+- Uses Python, explicitly conflicting with this project's Pi-side Bash/C++ constraint.
+- Has unsafe shell construction in `os.system('mpc add "{}"'.format(filename))` and a shell=True query path; must not be copied as-is.
+- The metadata parser depends on yt-dlp human-readable stdout and is brittle.
+- Useful only as a behavioral reference for playlist expansion, queue insertion, MPD database update, and cleanup. Do not adopt its download-to-library implementation.
+
+### Nuffic/youtube-mpd
+
+Inspected `README.md`, `package.json`, `Dockerfile`, `docker-compose.yml`, `src/index.ts`, `src/player/MpdPlayer.ts`, `src/player/MpdStatus.ts`, and `src/eventListener.ts`.
+
+- TypeScript/Node.js implementation based on `yt-cast-receiver` and `mpd-api`.
+- Receives YouTube Cast / YouTube Music Cast sessions (the README explicitly says it is not a generic receiver for arbitrary apps).
+- Extracts a video audio URL using `yt-dlp --get-url`, then adds that URL directly to MPD's queue. This is the closest of the two projects to direct, no-full-file streaming.
+- The MPD instance is configured as a single renderer; its implementation clears the queue and enables single/consume behavior. This is unsuitable as-is for MALP's shared general-purpose MPD queue and could disrupt ordinary playback.
+- It constructs shell commands with `child_process.exec` and interpolates the video ID. Replace with `spawn`/argument arrays and strict video-ID validation if reusing the approach.
+- The direct CDN URL is time-limited and stored in MPD's queue. There is no robust local URL-refresh proxy in the inspected code; queued items can fail after URL expiry.
+- Docker example uses host networking and bundles MPD plus receiver, while this project must integrate with an already configured Raspberry Pi MPD and its audio output.
+- Repository metadata/package references point to `dgalli1/ytm-mpd`; confirm upstream lineage and license obligations before copying implementation code. The inspected package declares ISC; verify the exact repository license file before code reuse.
+
+### Architecture decision after comparison
+
+Use a hybrid design, not a direct copy of either project:
+
+1. Keep the existing MALP Android share/bridge flow as the user interface.
+2. On Raspberry Pi, resolve YouTube IDs and metadata with yt-dlp using machine-readable output (`--dump-single-json` / `--flat-playlist` where appropriate), never parse human-readable progress output.
+3. Expand playlists into separate ordered MPD entries.
+4. Use a local HTTP streaming proxy on Raspberry Pi as the stable MPD URI. The proxy resolves/refreshes expiring upstream CDN URLs and streams bytes with back-pressure; it must not persist complete audio files.
+5. Configure and verify MPD's CURL input support for the local HTTP URI. This avoids pretending MPD can read an arbitrary producer FIFO as an input. Keep the local endpoint restricted to loopback/LAN and protect control endpoints with a token.
+6. Preserve normal MPD queue semantics. Do not clear the queue, enable global consume/single mode, or take over playback unless the user explicitly selected play-now.
+7. For the required Bash/C++ Pi-side constraint, implement the proxy/service and process supervision in C++ (or a carefully constrained Bash launcher); yt-dlp remains an external executable dependency. Do not introduce a Python daemon or Node.js runtime.
+8. Treat Nuffic's direct URL approach as a prototype/reference only; the local stable-URI proxy is required for long queues and URL expiry.
+9. Treat pbnoxious's playlist and cleanup workflow as behavioral reference only; do not download whole audio files.
+
+### Revised test gates
+
+- Confirm MPD was built with CURL input enabled (for example, inspect MPD build features and test an HTTP URI on the exact target build).
+- Test one YouTube item through local proxy into MPD without creating a complete audio file.
+- Test a playlist with ordered, independent queue entries and verify that ordinary local tracks remain intact.
+- Simulate CDN URL expiry and verify transparent re-resolution while the local MPD URI remains unchanged.
+- Test pause/resume/seek/next/stop and queue behavior against the existing MPD instance.
+- Test service authentication, loopback/LAN binding, process limits, cancellation, and cleanup.
