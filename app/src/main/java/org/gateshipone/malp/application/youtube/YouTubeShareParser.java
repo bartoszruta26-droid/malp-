@@ -60,6 +60,19 @@ public final class YouTubeShareParser {
         return result;
     }
 
+    /** Extract links from the text payloads used by ACTION_SEND_MULTIPLE. */
+    public static List<String> extractYouTubeUrls(Iterable<?> sharedTexts) {
+        if (sharedTexts == null) return Collections.emptyList();
+        List<String> result = new ArrayList<>();
+        for (Object item : sharedTexts) {
+            if (!(item instanceof CharSequence)) continue;
+            for (String url : extractYouTubeUrls(item.toString())) {
+                if (!result.contains(url)) result.add(url);
+            }
+        }
+        return result;
+    }
+
     public static boolean isYouTubeUrl(String value) {
         return validateAndNormalize(value) != null;
     }
