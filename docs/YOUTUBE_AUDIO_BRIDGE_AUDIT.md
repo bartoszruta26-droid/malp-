@@ -168,3 +168,15 @@ All six reported cases passed: binary FIFO transfer and cleanup; playlist reject
 - GitHub Actions run `44118536311` for the exact commit `6e880cb9e5a15014a5e3e290bb019548147d23ba` completed successfully.
 - This closes the specific `retainOnly()` test gate. It does not independently establish live YouTube/CDN retrieval, audible hardware output, or RAM-only/no-persistent-storage behavior. No production binary installation, service restart, MPD queue change, or playback intervention was performed as part of this verification.
 
+## Verification addendum — coordinated registry shutdown (2026-11-17)
+
+- Implemented explicit `LazyStreamSessionRegistry::shutdown()` with a shutdown state, rejection of new `create()`/`activate()` operations, cancellation of session tokens, joining of already-published upstream workers through `clear()`, and a condition-variable barrier waiting for in-flight `activate()` calls to leave.
+- Added an RAII activation-operation guard so every return path from `activate()` releases its in-flight count.
+- The registry destructor calls `shutdown()`. The HTTP server drains control-request workers before calling `sessions->shutdown()`, then joins stream workers.
+- Added deterministic test `testShutdownWaitsForUnpublishedActivationBeforeDestruction()`. It pauses activation after upstream start but before publication, starts shutdown, verifies new session creation is rejected and shutdown remains blocked until the activation is released, then verifies no sessions/active slots remain and post-shutdown create/activate operations are rejected.
+- Commit tested: `bffc9c91b15741f9282bc9ae77b7a28ae53929f8` (`Test coordinated registry shutdown during unpublished activation`).
+- GitHub Actions run `44120703708` for the exact commit completed successfully; configure, build, and test steps passed.
+- User-reported Raspberry Pi build succeeded; targeted lazy-session tests passed; full CTest **11/11 passed** in 5.09 seconds. The working tree was clean.
+- Scope limitation: the barrier explicitly counts `activate()` operations. The owner must stop dispatching other public registry operations before destroying the object. The HTTP server retains shared ownership while stream workers are joined. The test uses an explicit `shutdown()` barrier and does not attempt the invalid C++ pattern of destroying an object concurrently with a method call through a raw reference.
+- No sanitizer run, live YouTube/CDN retrieval, audible hardware validation, RAM-only/no-persistent-storage validation, production binary installation, or service restart was performed. No production MPD queue/playback state was changed.
+
