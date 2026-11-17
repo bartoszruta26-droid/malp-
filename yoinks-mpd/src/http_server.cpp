@@ -248,6 +248,10 @@ void HttpServer::run() {
     asio::thread_pool workers{kWorkerCount};
     auto active_connections = std::make_shared<std::atomic<std::size_t>>(0);
     const auto address = asio::ip::make_address(config_.bind_address);
+    if (!address.is_loopback()) {
+        throw std::invalid_argument(
+                "HTTP control API is loopback-only until TLS termination is implemented");
+    }
     tcp::acceptor acceptor{context, tcp::endpoint{address, config_.port}};
     for (;;) {
         tcp::socket socket{context};
