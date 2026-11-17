@@ -432,3 +432,20 @@ Nie publikować APK jako „gotowego do instalacji” na podstawie samego CI. Wy
 5. **Separate acceptance gates:** verify live YouTube/CDN retrieval on Raspberry Pi, actual MPD CURL-input compatibility, audible hardware output, and RAM-only/no-persistent-storage behavior. These are not established by the current fixture-based tests.
 
 No production binary installation or service restart without explicit user approval.
+
+
+## Lifecycle verification update — shutdown versus registry mutation (2026-11-17)
+
+- Commit `63bf4b8aaba114a56949f4d3424ce472e9147eb3` adds deterministic races between shutdown and `release()`, `erase()`, `clear()`, and `retainOnly()` while an upstream worker is started but unpublished.
+- GitHub Actions run `44122267302` passed for the exact commit; intermediate commit `5d6d7dd5` also passed run `44122205972`.
+- User-reported Raspberry Pi build succeeded; targeted lifecycle test passed; full CTest **11/11 passed** in 5.36 seconds; working tree clean.
+- The test keeps the registry alive until shutdown and all racing threads have joined. It does not claim safety for destroying an object while another thread calls a method through a raw reference.
+- The targeted shutdown/mutation test gate is complete. No production binary or service was changed.
+
+## Next implementation sequence
+
+1. **Sanitizer configuration and lifecycle stress:** inspect the existing CI workflow and CMake setup; add an opt-in AddressSanitizer/UndefinedBehaviorSanitizer test build (without changing normal release flags), run the lifecycle suite under sanitizers, and add bounded repeated concurrency stress for activation, release, erase, clear, retainOnly, shutdown, and active-slot accounting. Keep test time bounded and deterministic where possible.
+2. **Streaming robustness:** test slow consumers/back-pressure, client disconnect, upstream timeout/error, byte-limit enforcement, reconnect/re-resolution, and orderly server shutdown.
+3. **URL/DNS/SSRF review:** inspect DNS-resolved private, loopback, and link-local address handling while preserving TLS hostname verification; add focused tests before changing resolution or connection pinning.
+4. **Separate acceptance gates:** live YouTube/CDN retrieval on Raspberry Pi, actual MPD CURL-input capability on the target build, audible hardware output, and RAM-only/no-persistent-storage behavior including swap. Do not infer these from local fixture tests.
+5. No production binary installation, MPD queue/playback intervention, or service restart without explicit approval.
