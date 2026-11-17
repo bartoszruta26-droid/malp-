@@ -23,6 +23,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <atomic>
 #include <array>
 #include <limits>
 #include <stdexcept>
@@ -69,8 +70,13 @@ ProcessResult runBoundedProcess(const std::string& executable,
                                 const std::vector<std::string>& arguments,
                                 const std::uint32_t timeout_milliseconds,
                                 const std::size_t maximum_stdout_bytes,
-                                const std::size_t maximum_stderr_bytes) {
+                                const std::size_t maximum_stderr_bytes,
+                                const std::atomic_bool* cancellation) {
     ProcessResult result;
+    if (cancellation != nullptr && cancellation->load(std::memory_order_relaxed)) {
+        result.error_code = "process_cancelled";
+        return result;
+    }
     int stdout_pipe[2]{-1, -1};
     int stderr_pipe[2]{-1, -1};
     if (pipe(stdout_pipe) != 0 || pipe(stderr_pipe) != 0) {
@@ -195,7 +201,11 @@ ProcessResult runBoundedProcess(const std::string& executable,
     };
 
     while (!child_exited || stdout_pipe[0] >= 0 || stderr_pipe[0] >= 0) {
-        if (std::chrono::steady_clock::now() >= deadline) {
+        if (cancellation != nullptr && cancellation->load(std::memory_order_relaxed)) {
+            result.error_code = "process_cancelled";
+            abort_child = true;
+        }
+        if (std::chrono::steady_clock::now() >= deadline && !abort_child) {
             result.error_code = "process_timeout";
             abort_child = true;
         }
@@ -266,7 +276,8 @@ bool YtDlpResolver::isValidVideoId(const std::string& video_id) noexcept {
     return true;
 }
 
-MetadataResult YtDlpResolver::resolveMetadata(const std::string& youtube_url) const {
+MetadataResult YtDlpResolver::resolveMetadata(const std::string& youtube_url,
+                                               const std::atomic_bool* cancellation) const {
     MetadataResult result;
     if (!isAllowedYouTubeUrl(youtube_url)) {
         result.error_code = "invalid_youtube_url";
@@ -281,7 +292,7 @@ MetadataResult YtDlpResolver::resolveMetadata(const std::string& youtube_url) co
     };
     const ProcessResult process = runBoundedProcess(config_.executable, arguments,
             config_.timeout_milliseconds, config_.maximum_stdout_bytes,
-            config_.maximum_stderr_bytes);
+            config_.maximum_stderr_bytes, cancellation);
     if (!process.success) { result.error_code = process.error_code; return result; }
 
     Json root;
@@ -338,7 +349,8 @@ MetadataResult YtDlpResolver::resolveMetadata(const std::string& youtube_url) co
 }
 
 bool YtDlpResolver::resolveAudioUrl(const std::string& video_id,
-                                    std::string& output_url) const {
+                                    std::string& output_url,
+                                    const std::atomic_bool* cancellation) const {
     output_url.clear();
     if (!isValidVideoId(video_id)) return false;
     const std::string watch_url = "https://www.youtube.com/watch?v=" + video_id;
@@ -349,7 +361,8 @@ bool YtDlpResolver::resolveAudioUrl(const std::string& video_id,
         "--get-url", "--", watch_url
     };
     const ProcessResult process = runBoundedProcess(config_.executable, arguments,
-            config_.timeout_milliseconds, 16 * 1024, config_.maximum_stderr_bytes);
+            config_.timeout_milliseconds, 16 * 1024, config_.maximum_stderr_bytes,
+            cancellation);
     if (!process.success) return false;
 
     std::string candidate = process.output;
