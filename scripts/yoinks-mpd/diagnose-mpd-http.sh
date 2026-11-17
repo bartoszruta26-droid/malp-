@@ -18,7 +18,7 @@ if command -v mpd >/dev/null 2>&1; then mpd --version 2>&1; else printf "MPD ver
 if command -v mpc >/dev/null 2>&1; then mpc version 2>&1 || true; fi
 
 section "installed package versions"
-if command -v dpkg-query >/dev/null 2>&1; then dpkg-query -W -f="${Package} ${Version} ${Architecture}\n" mpd mpc 2>&1 || true; fi
+if command -v dpkg-query >/dev/null 2>&1; then dpkg-query -W -f='${Package} ${Version} ${Architecture}\n' mpd mpc 2>&1 || true; fi
 
 section "MPD configuration paths (names and plugin directives only)"
 for candidate in /etc/mpd.conf /etc/mpd/mpd.conf "$HOME/.config/mpd/mpd.conf"; do
