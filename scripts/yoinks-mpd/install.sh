@@ -37,7 +37,7 @@ tmp="$(mktemp -d "${TMPDIR:-/var/tmp}/yoinks-mpd-install.XXXXXXXX")"
 cleanup() { rm -rf -- "${tmp}"; }
 trap cleanup EXIT INT TERM HUP
 
-info "krok 1/6: instalacja narzędzi kompilacji i bibliotek"
+info "krok 1/7: instalacja narzędzi kompilacji i bibliotek"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y --no-install-recommends \
@@ -48,20 +48,20 @@ for tool in cmake c++ ctest curl unzip install; do
   have "$tool" || fail "brak wymaganego narzędzia po instalacji pakietów: $tool"
 done
 
-info "krok 2/6: konfiguracja CMake (C++17, Release, testy włączone)"
+info "krok 2/7: konfiguracja CMake (C++17, Release, testy włączone)"
 cmake -S "${SOURCE_DIR}" -B "${tmp}/build" \
   -DCMAKE_BUILD_TYPE=Release \
   -DYOINKS_MPD_BUILD_TESTS=ON
 
-info "krok 3/6: kompilacja z -Wall -Wextra -Wpedantic -Werror"
+info "krok 3/7: kompilacja z -Wall -Wextra -Wpedantic -Werror"
 cmake --build "${tmp}/build" --parallel 2
 [[ -x "${tmp}/build/yoinks-mpd" ]] || fail "kompilacja nie utworzyła pliku yoinks-mpd"
 
-info "krok 4/6: uruchomienie pełnego zestawu CTest"
+info "krok 4/7: uruchomienie pełnego zestawu CTest"
 ctest --test-dir "${tmp}/build" --output-on-failure
 info "wszystkie testy CTest zakończyły się powodzeniem"
 
-info "krok 5/6: pobranie oficjalnego yt-dlp i kontrola SHA-256"
+info "krok 5/7: pobranie oficjalnego yt-dlp i kontrola SHA-256"
 curl --fail --location --silent --show-error "${RELEASE}/${asset}" -o "${tmp}/${asset}"
 curl --fail --location --silent --show-error "${RELEASE}/SHA2-256SUMS" -o "${tmp}/SHA2-256SUMS"
 expected="$(awk -v n="${asset}" '$2 == n || $2 == "*"n {print $1; exit}' "${tmp}/SHA2-256SUMS")"
@@ -81,6 +81,32 @@ fi
 [[ -n "${candidate:-}" && -f "${candidate}" ]] || fail "nie znaleziono wykonywalnego pliku yt-dlp"
 chmod 0755 "${candidate}"
 "${candidate}" --version >/dev/null || fail "kontrola wersji yt-dlp nie powiodła się"
+
+info "krok 6/7: test online resolvera YouTube (wyłącznie metadane)"
+resolved_id="$("${candidate}" \
+  --ignore-config \
+  --no-cache-dir \
+  --no-playlist \
+  --skip-download \
+  --no-progress \
+  --no-warnings \
+  --socket-timeout 20 \
+  --retries 1 \
+  --extractor-retries 1 \
+  --print '%(id)s' \
+  "${TEST_VIDEO_URL}" 2>/dev/null)" || fail "yt-dlp nie zdołał odczytać metadanych filmu testowego; sprawdź łączność i dostępność filmu"
+[[ "${resolved_id}" == "${TEST_VIDEO_ID}" ]] || fail "resolver zwrócił inny identyfikator niż oczekiwany film testowy"
+info "resolver rozpoznał oczekiwany film: ${TEST_VIDEO_ID}; pobieranie audio było wyłączone"
+
+info "krok 7/7: instalacja zweryfikowanych plików wykonywalnych"
+install -d -m 0755 "${BIN_DIR}"
+install -m 0755 "${tmp}/build/yoinks-mpd" "${BIN_DIR}/.yoinks-mpd.new"
+install -m 0755 "${candidate}" "${BIN_DIR}/.yt-dlp.new"
+mv -f -- "${BIN_DIR}/.yoinks-mpd.new" "${YOINKS_BIN}"
+mv -f -- "${BIN_DIR}/.yt-dlp.new" "${YTDLP_BIN}"
+
+"${YTDLP_BIN}" --version >/dev/null || fail "zainstalowany yt-dlp nie przechodzi kontroli uruchomienia"
+[[ -x "${YOINKS_BIN}" ]] || fail "zainstalowany yoinks-mpd nie jest wykonywalny"
 
 info "WYNIK: kompilacja, testy, instalacja i test metadanych zakończone powodzeniem"
 info "yoinks-mpd: ${YOINKS_BIN}"
