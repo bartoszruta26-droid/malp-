@@ -818,3 +818,11 @@ Zmiany oczekują na wynik GitHub Actions. Testy nie łączą się z YouTube i ni
 Commit testowy `cfa8a0fb882d6ae0c1dff24475331f0d4d61cc06` uzyskał `build-and-test: success` w GitHub Actions (run `44048522129`, job `133920152708`, zakończony 2026-11-17 08:39:49 UTC). Kompilacja C++ zakończyła się powodzeniem, a CTest: **6/6 PASS** (`bounded_stream_buffer`, `http_upstream_validation`, `stream_session_registry`, `chunked_stream_writer`, `yt_dlp_resolver`, `http_api_integration`). Test `yt_dlp_resolver` przeszedł w 0,21 s i obejmuje anulowanie działającego procesu.
 
 Dowód dotyczy runnera GitHub Actions x86_64. Nie wykonano nowego builda na Raspberry Pi ani testu z MPD CURL. Commit dokumentacyjny `454b7b5...` i commit audytu są późniejsze, ale nie zmieniają kodu C++; kodowy commit objęty wynikiem CI to `cfa8a0f...`.
+
+### Wynik CI — izolacja deskryptorów resolvera
+
+Commit `572ee0d6820f282653a501e375ef6788c9c72d77` uzyskał `build-and-test: success` w GitHub Actions (run `44048843126`, job `133921236315`, zakończony 2026-11-17 08:41:46 UTC). Kompilacja C++ zakończyła się powodzeniem, CTest: **6/6 PASS**. Nowy test regresyjny zamyka w procesie potomnym deskryptory stdin/stdout/stderr i potwierdza, że `posix_spawn` nadal poprawnie przechwytuje wynik resolvera.
+
+Zmiana normalizuje deskryptory czterech końców potoków do numerów >= 3 przed konfiguracją działań `posix_spawn`. Chroni to przekierowania standardowych strumieni przed kolizją, gdy usługa startuje z zamkniętym deskryptorem 0, 1 lub 2.
+
+Dowód dotyczy runnera GitHub Actions x86_64. Nie wykonano builda na Raspberry Pi. CI nie potwierdza kompatybilności MPD CURL ani odtwarzania end-to-end.
