@@ -391,3 +391,5 @@ Nie publikować APK jako „gotowego do instalacji” na podstawie samego CI. Wy
 - Commits: `b854b2f2`, `06aead23`, `5c202ecd`.
 - Pending gates: GitHub Actions success for the latest branch head; Raspberry Pi build; targeted lazy-session test; full CTest suite; verify production service remains untouched and binary hash unchanged.
 - Next lifecycle cases after this gate: `erase()`/ `clear()` during post-start/pre-publication, and `retainOnly()`/slot accounting while a stream is being published. Then continue slow-consumer/back-pressure, shutdown, and DNS/SSRF review.
+
+- CI run `44107862029` for `5c202ecd` completed successfully (configure/build/test). Raspberry Pi execution remains the next required verification gate.
