@@ -289,3 +289,12 @@ Nie publikować APK jako „gotowego do instalacji” na podstawie samego CI. Wy
 - The test then requests the queued local stream URI. The yt-dlp fixture is invoked in --get-url mode and deliberately returns a disallowed host; the proxy must reject activation with 502. This verifies lazy resolver invocation and the CDN host security gate without internet access or media downloads.
 - This is not yet a successful media-byte relay test: no valid HTTPS googlevideo upstream is served by the fixture, and no MPD CURL playback is claimed. The next test increment must provide a deterministic, TLS-verified upstream seam and verify actual chunk bytes through the proxy, while retaining production host validation.
 - No Android source or APK was changed or built. No production MPD instance, queue, configuration, or Raspberry Pi was touched.
+
+
+### Verification and playlist-order extension — 2026-11-17
+
+- CI run 44088216821 completed successfully for commit 3aa13095955893c49d77a20034ae8821eecfb894. C++ build succeeded and all 9 CTest cases passed, including the new HTTP-to-mock-MPD integration test.
+- The follow-up commit db9d722a3f9c0ac08576c9569a27dc1dff781782 added explicit standard-library includes to the mock MPD fixture; its C++ workflow run 44088253147 also completed successfully.
+- The HTTP integration fixture has now been expanded from one video to a three-item playlist. It verifies three independent local MPD stream URIs and requests each in the same order, checking that yt-dlp is invoked with the corresponding video IDs in that order.
+- The playlist-order extension is committed as bad818262fc004f02231c9964a50ea9861bbccce. Its CI result is pending at the time of this audit update.
+- Media-byte relay is still not proven: the stream test deliberately uses an invalid CDN host to exercise rejection. The next acceptance test must exercise a successful TLS-verified upstream response and confirm the exact bytes reach the local HTTP stream consumer. Hardware MPD playback remains unverified.
