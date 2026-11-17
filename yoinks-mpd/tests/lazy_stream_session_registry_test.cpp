@@ -425,6 +425,108 @@ void testShutdownWaitsForUnpublishedActivationBeforeDestruction() {
             "shutdown must leave no sessions or active slots and reject later work");
 }
 
+void testShutdownSerializesWithConcurrentRegistryMutations() {
+    enum class Mutation { release, erase, clear, retain_only };
+    const Mutation mutations[] = {
+        Mutation::release, Mutation::erase, Mutation::clear, Mutation::retain_only
+    };
+    const char* names[] = {"release", "erase", "clear", "retainOnly"};
+
+    for (std::size_t index = 0; index < 4; ++index) {
+        std::mutex mutex;
+        std::condition_variable condition;
+        bool after_start_entered = false;
+        bool allow_activation_to_finish = false;
+        bool start_racers = false;
+        bool mutation_finished = false;
+        std::atomic<bool> shutdown_started{false};
+        std::atomic<bool> shutdown_finished{false};
+
+        yoinks::LazyStreamSessionRegistryConfig config;
+        config.upstream.connect_timeout_seconds = 1;
+        config.upstream.test_connect_to_for_tests =
+                "rr1.googlevideo.com:443:127.0.0.1:1";
+        config.after_upstream_start_for_tests = [&] {
+            std::unique_lock<std::mutex> lock(mutex);
+            after_start_entered = true;
+            condition.notify_all();
+            condition.wait(lock, [&] { return allow_activation_to_finish; });
+        };
+
+        yoinks::LazyStreamSessionRegistry registry(config);
+        const auto id = registry.create("qqAYW7uxErI");
+        bool activated = true;
+        std::thread activation_worker([&] {
+            activated = registry.activate(id,
+                [](const std::string&, std::string& url, const std::atomic_bool*) {
+                    url = "https://rr1.googlevideo.com/audio.bin";
+                    return true;
+                });
+        });
+
+        {
+            std::unique_lock<std::mutex> lock(mutex);
+            condition.wait(lock, [&] { return after_start_entered; });
+        }
+
+        std::thread mutation_worker([&] {
+            {
+                std::unique_lock<std::mutex> lock(mutex);
+                condition.wait(lock, [&] { return start_racers; });
+            }
+            switch (mutations[index]) {
+                case Mutation::release: registry.release(id, true); break;
+                case Mutation::erase: registry.erase(id); break;
+                case Mutation::clear: registry.clear(); break;
+                case Mutation::retain_only: registry.retainOnly({id}); break;
+            }
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                mutation_finished = true;
+            }
+            condition.notify_all();
+        });
+
+        std::thread shutdown_worker([&] {
+            {
+                std::unique_lock<std::mutex> lock(mutex);
+                condition.wait(lock, [&] { return start_racers; });
+            }
+            shutdown_started.store(true);
+            registry.shutdown();
+            shutdown_finished.store(true);
+            condition.notify_all();
+        });
+
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            start_racers = true;
+        }
+        condition.notify_all();
+
+        {
+            std::unique_lock<std::mutex> lock(mutex);
+            condition.wait(lock, [&] {
+                return mutation_finished && shutdown_started.load();
+            });
+            allow_activation_to_finish = true;
+        }
+        condition.notify_all();
+
+        activation_worker.join();
+        mutation_worker.join();
+        shutdown_worker.join();
+
+        const bool empty = registry.size() == 0 && registry.activeCount() == 0;
+        require(!activated, std::string("activation must be cancelled during shutdown race with ")
+                + names[index]);
+        require(shutdown_finished.load(),
+                std::string("shutdown must finish when raced with ") + names[index]);
+        require(empty, std::string("shutdown must leave no sessions or active slots after ")
+                + names[index]);
+    }
+}
+
 void testRetainOnlyPreservesUnpublishedActivationAndSlotAccounting() {
     std::mutex mutex;
     std::condition_variable condition;
@@ -608,6 +710,7 @@ int main() {
         testEraseDuringStartedButUnpublishedStreamDoesNotRecreateSession();
         testClearDuringStartedButUnpublishedStreamDoesNotRecreateSession();
         testShutdownWaitsForUnpublishedActivationBeforeDestruction();
+        testShutdownSerializesWithConcurrentRegistryMutations();
         testRetainOnlyPreservesUnpublishedActivationAndSlotAccounting();
         testRetainOnlyPreservesInFlightActivation();
         testReleaseRetainsQueuedCapabilityForReplay();
