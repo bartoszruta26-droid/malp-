@@ -102,9 +102,6 @@ android {
     lint {
         abortOnError false
     }
-    testOptions {
-        unitTests.includeAndroidResources = true
-    }
     buildFeatures {
         aidl true
     }
@@ -133,5 +130,4 @@ dependencies {
     implementation 'info.debatty:java-string-similarity:2.0.0'
 
     testImplementation 'junit:junit:4.13.2'
-    testImplementation 'org.robolectric:robolectric:4.13.2'
 }
