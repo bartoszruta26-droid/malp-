@@ -109,8 +109,9 @@ done
 [[ "$bridge_ready" == "1" ]] || fail "Yoinks-MPD bridge did not start"
 
 info "resolving and streaming the supplied YouTube URL (yt-dlp cache/download disabled)"
-[[ "$video_url" != *'"'* && "$video_url" != *'\\'* && "$video_url" != *$'\n'* && "$video_url" != *$'\r'* ]] \
-    || fail "URL contains characters that cannot be safely embedded in this JSON request"
+if [[ "$video_url" == *'"'* || "$video_url" == *\\* || "$video_url" == *$'\n'* || "$video_url" == *$'\r'* ]]; then
+    fail "URL contains characters that cannot be safely embedded in this JSON request"
+fi
 payload="$(printf '{"url":"%s","mode":"play_now"}' "$video_url")"
 response="$(curl --silent --show-error --fail --max-time 75 \
     -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
