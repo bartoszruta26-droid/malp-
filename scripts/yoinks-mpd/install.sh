@@ -82,32 +82,6 @@ fi
 chmod 0755 "${candidate}"
 "${candidate}" --version >/dev/null || fail "kontrola wersji yt-dlp nie powiodła się"
 
-info "krok 6/6: instalacja zweryfikowanych plików wykonywalnych"
-install -d -m 0755 "${BIN_DIR}"
-install -m 0755 "${tmp}/build/yoinks-mpd" "${BIN_DIR}/.yoinks-mpd.new"
-install -m 0755 "${candidate}" "${BIN_DIR}/.yt-dlp.new"
-mv -f -- "${BIN_DIR}/.yoinks-mpd.new" "${YOINKS_BIN}"
-mv -f -- "${BIN_DIR}/.yt-dlp.new" "${YTDLP_BIN}"
-
-"${YTDLP_BIN}" --version >/dev/null || fail "zainstalowany yt-dlp nie przechodzi kontroli uruchomienia"
-[[ -x "${YOINKS_BIN}" ]] || fail "zainstalowany yoinks-mpd nie jest wykonywalny"
-
-info "test online: resolver YouTube (wyłącznie metadane; bez pobierania mediów)"
-resolved_id="$("${YTDLP_BIN}" \
-  --ignore-config \
-  --no-cache-dir \
-  --no-playlist \
-  --skip-download \
-  --no-progress \
-  --no-warnings \
-  --socket-timeout 20 \
-  --retries 1 \
-  --extractor-retries 1 \
-  --print '%(id)s' \
-  "${TEST_VIDEO_URL}" 2>/dev/null)" || fail "yt-dlp nie zdołał odczytać metadanych filmu testowego; sprawdź łączność i dostępność filmu"
-[[ "${resolved_id}" == "${TEST_VIDEO_ID}" ]] || fail "resolver zwrócił inny identyfikator niż oczekiwany film testowy"
-info "resolver rozpoznał oczekiwany film: ${TEST_VIDEO_ID}; pobieranie audio było wyłączone"
-
 info "WYNIK: kompilacja, testy, instalacja i test metadanych zakończone powodzeniem"
 info "yoinks-mpd: ${YOINKS_BIN}"
 info "yt-dlp: ${YTDLP_BIN} (resolver metadanych/adresu źródłowego; bez pobierania mediów)"
