@@ -43,3 +43,11 @@ A minimal Boost.Beast HTTP server is now built as `yoinks-mpd`. It exposes an un
 The server also validates YouTube URLs on the Raspberry Pi: HTTPS only, exact host allowlist, no userinfo or fragments, and strict video/playlist identifier and path checks. Client-side validation is not trusted as the security boundary.
 
 The server requires a 43–128 character base64url bearer token (minimum 256-bit entropy) and compares credentials over a fixed 128-byte loop. Generate tokens from a cryptographically secure random source; do not use human passwords.
+
+## HTTPS upstream relay component — implementation status
+
+Added `HttpUpstreamStream`, a C++17 producer that uses libcurl to fetch media progressively and writes callback chunks into the fixed-capacity `BoundedStreamBuffer`. The default RAM buffer is 256 KiB and the per-stream byte ceiling is 512 MiB. Back-pressure blocks the libcurl write callback until the consumer frees RAM; cancellation wakes a blocked writer and aborts the transfer.
+
+Security constraints: HTTPS only, exact `*.googlevideo.com` host boundary, standard port 443 only, no URL userinfo, TLS peer/host verification enabled, redirects disabled, connect timeout and low-speed timeout enabled. Redirects are deliberately not followed because they could escape the CDN host policy; an expired or redirected source must be resolved again by the trusted yt-dlp resolver. Upstream URLs are never returned to Android or logged.
+
+The component is not yet connected to a local HTTP response endpoint. It is a bounded upstream producer only; the next implementation step is a stable stream-session registry and chunked local HTTP response consumed by MPD. The end-to-end bridge is not ready.
