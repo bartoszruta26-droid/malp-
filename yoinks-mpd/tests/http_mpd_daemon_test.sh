@@ -23,7 +23,8 @@ cleanup() {
 trap cleanup EXIT
 trap 'status=$?; echo "Real MPD integration failed at line $LINENO: $BASH_COMMAND" >&2; cat "$tmp/mpd.log" "$tmp/bridge.log" "$tmp/tls.log" >&2 2>/dev/null || true; exit "$status"' ERR
 
-if ! mpd --version 2>&1 | grep -Eiq 'curl'; then
+mpd_version="$(mpd --version 2>&1 || true)"
+if ! grep -Eiq 'curl' <<<"$mpd_version"; then
     echo "This MPD build does not advertise the CURL input plugin" >&2
     mpd --version >&2
     exit 1
