@@ -1,3 +1,41 @@
+# Bieżący status audytu — nadrzędna aktualizacja 2026-11-17
+
+> **Ta sekcja ma pierwszeństwo przed starszymi fragmentami audytu.** W dalszej części dokumentu zachowały się historyczne opisy stanu sprzed implementacji C++; nie należy ich odczytywać jako opisu aktualnej gałęzi.
+
+**Repozytorium:** `bartoszruta26-droid/malp-`  
+**Gałąź:** `feature/youtube-audio-bridge`  
+**HEAD sprawdzony przy aktualizacji:** `26b628b91c20f499054a9df8cf69d28360989959`
+
+## Stan potwierdzony w kodzie
+
+1. Serwer C++ HTTP, resolver `yt-dlp`, `LazyStreamSessionRegistry`, `YoutubeQueueService` i `MpdQueueManager` są obecne i połączone w przepływie `POST /api/v1/queue` oraz `GET /stream/{opaque-id}`.
+2. Enqueue tworzy wyłącznie capability w pamięci i stabilne lokalne URI. CDN URL jest rozwiązywany dopiero przy GET strumienia. Audio jest przesyłane progresywnie przez ograniczony bufor RAM; nie ma zapisu audio do plików ani plikowego cache.
+3. Reconciliation kolejki korzysta z `playlistinfo`; operacje usługi są serializowane. Sesje nieobecne w kolejce są sprzątane z ochroną sesji aktywnych.
+4. `enqueue` dopisuje pozycje. `play_now` wstawia nowy blok na początek kolejki przez odwrotne `addid URI 0`, zachowuje kolejność żądania i wywołuje `playid` dla pierwszej pozycji. Nie ma komendy `clear` ani zmiany trybów MPD.
+5. HTTP API jest ograniczone do loopback. Klient Android wymaga HTTPS, wymaga tokenu Bearer i zapisuje token w postaci zaszyfrowanej kluczem chronionym przez Android Keystore. Przykładowa konfiguracja Nginx TLS jest dostarczona, ale nie wdrożona.
+6. Klient Android komunikuje się z `POST /api/v1/queue`; nie przekazuje ani nie otrzymuje signed CDN URL. Odpowiedź zawiera `success`, `queued`, `started`, `playlist`, `rollback_complete`; klient weryfikuje sukces i zakres liczby pozycji.
+7. Test HTTP wykorzystuje atrapę resolvera oraz niedostępny port MPD i sprawdza kontrolowany błąd 503. Osobne testy obejmują kolejkę MPD, kolejność `play_now`, reconciliation, lazy activation, anulowanie, limity i cykl życia buforów.
+
+## Wyniki automatycznych testów
+
+- C++ build + CTest: run `44063851359` — `success`; obejmuje poprawkę rezerwacji slotu RAM do zwolnienia bufora zakończonego strumienia.
+- Android `assemble-debug`: run `44064159601` — `success`; poprawka walidacji tokenu podczas odszyfrowywania ustawień.
+- Android `assemble-debug`: run `44064310295` — `success`; najnowszy sprawdzony commit gałęzi.
+- Niektóre wcześniejsze przebiegi zakończyły się błędem podczas zmian pośrednich; nie są podstawą do deklaracji gotowości. Powyższe sukcesy dotyczą konkretnych SHA wskazanych przez GitHub Actions, a nie testu na urządzeniu.
+
+## Otwarte bramki — bez fałszywej deklaracji gotowości
+
+- **Raspberry Pi / MPD:** brak nowego raportu z urządzenia po integracji. Trzeba wykonać dostarczony, odczytowy `scripts/yoinks-mpd/diagnose-mpd-http.sh` i zachować wynik wersji MPD, listy input plugins, CURL, swap/zram i mountów.
+- **MPD/CURL:** brak potwierdzenia, że docelowy build MPD obsługuje lokalny HTTP stream w wymagany sposób. Obecny endpoint nie obsługuje HEAD (405) ani Range (501); należy to sprawdzić z konkretną wersją MPD, bez naruszania produkcyjnej kolejki.
+- **Test pozytywny end-to-end:** nie ma jeszcze testu HTTP 200 z kontrolowanym mock MPD przechodzącego cały flow API; obecny test HTTP dochodzi do MPD i weryfikuje fail-safe 503.
+- **TLS wdrożeniowy:** przykład Nginx jest tylko konfiguracją referencyjną; brak wdrożonego certyfikatu, reverse proxy i testu Android → TLS proxy → loopback API.
+- **Android:** kompilacja debug przechodzi, ale nie potwierdza testu na urządzeniu, odbioru ACTION_SEND/ACTION_SEND_MULTIPLE, UX, konfiguracji certyfikatu ani działania z rzeczywistym serwerem.
+- **Eksploatacja:** instalator nie tworzy jeszcze kompletnej usługi systemd ani bezpiecznego wdrożenia Nginx; nie instalować ani restartować działającego MPD bez jawnej zgody.
+
+**Wniosek:** implementacja serwerowa i klient Android są obecne w gałęzi, a wskazane przebiegi CI przechodzą. Projekt pozostaje w stanie *integracja kodowa — walidacja docelowego urządzenia i end-to-end otwarta*. Nie scalać do `main` i nie ogłaszać gotowości produkcyjnej.
+
+---
+
 # Profesjonalny audyt i plan realizacji: YouTube → MALP → Raspberry Pi → MPD
 
 **Data audytu:** 2026-11-17  
