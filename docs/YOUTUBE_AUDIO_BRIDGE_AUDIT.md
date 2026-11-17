@@ -109,3 +109,16 @@ bash tests/yoinks-mpd/test-yt-dlp-to-fifo.sh
 ```
 
 All six reported cases passed: binary FIFO transfer and cleanup; playlist rejection; lookalike-host rejection; preservation of existing files; symlink rejection; and yt-dlp failure propagation with cleanup. This is user-reported target-device execution, not an independently reproduced run in the development environment. It does not establish MPD FIFO input compatibility or end-to-end playback.
+
+
+## Verification addendum — session-registry lock fix (2026-11-17)
+
+- Commit verified: `2f40a5f8f3c5fc438d0462e9b44961126bbee8dd` (`Avoid joining upstream worker under session registry lock`).
+- The user pulled this commit onto the Raspberry Pi and confirmed that `discard_stream` is decided while holding the registry mutex, while `stream->cancel()` and `stream->wait()` execute after the lock scope.
+- User-reported target-device build: `cmake --build /tmp/yoinks-mpd-audit --parallel 2` completed successfully.
+- User-reported target-device CTest: **11/11 passed**, total 6.70 seconds, including `lazy_stream_session_registry`, HTTP API integration, byte-stream integration, and `real_mpd_http_proxy_playback`.
+- The matching GitHub Actions C++ workflow run **44104070635** for the exact commit `2f40a5f8f3c5fc438d0462e9b44961126bbee8dd` completed with conclusion `success`.
+- The production service remained `active/running`, with `NRestarts=0`. Production binary SHA-256 remained `21bbe326959062c7d036a5f069bcd6dca7de0a02eccb0ee3a048d9c6eadbf8f8`; no production deployment or restart occurred. The local audit build is not the installed production binary.
+- Git checkout reported HEAD and origin at `2f40a5f8` and an empty `git status --short`.
+- Review note: existing registry tests cover resolver-in-flight cancellation and queue reconciliation, but do not yet deterministically force the narrow race after upstream worker start and before stream publication. Add a controlled regression test before declaring this concurrency edge fully covered.
+- This verification does not establish live YouTube/CDN playback, audible hardware output, or persistent-storage/swap behavior during a long real stream.
