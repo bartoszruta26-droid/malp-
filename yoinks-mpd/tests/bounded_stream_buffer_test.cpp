@@ -5,6 +5,8 @@
 #include "yoinks/bounded_stream_buffer.hpp"
 
 #include <array>
+#include <condition_variable>
+#include <mutex>
 #include <cstdint>
 #include <exception>
 #include <iostream>
@@ -45,13 +47,25 @@ void testWraparoundAndBoundedReads() {
 }
 
 void testProducerBackPressureAndCloseDrain() {
-    yoinks::BoundedStreamBuffer buffer(3);
+    std::mutex mutex;
+    std::condition_variable condition;
+    bool writer_blocked = false;
+    yoinks::BoundedStreamBuffer buffer(3, [&] {
+        std::lock_guard<std::mutex> lock(mutex);
+        writer_blocked = true;
+        condition.notify_all();
+    });
     const std::vector<std::uint8_t> payload{10, 11, 12, 13, 14, 15, 16};
     bool writer_result = false;
     std::thread writer([&] {
         writer_result = buffer.write(payload.data(), payload.size());
         buffer.close();
     });
+
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        condition.wait(lock, [&] { return writer_blocked; });
+    }
 
     std::vector<std::uint8_t> received;
     std::array<std::uint8_t, 2> part{};
@@ -67,11 +81,22 @@ void testProducerBackPressureAndCloseDrain() {
 }
 
 void testCancelWakesBlockedWriterAndReader() {
-    yoinks::BoundedStreamBuffer buffer(1);
+    std::mutex mutex;
+    std::condition_variable condition;
+    bool writer_blocked = false;
+    yoinks::BoundedStreamBuffer buffer(1, [&] {
+        std::lock_guard<std::mutex> lock(mutex);
+        writer_blocked = true;
+        condition.notify_all();
+    });
     const std::uint8_t value = 42;
     require(buffer.write(&value, 1), "initial write failed");
     bool writer_result = true;
     std::thread writer([&] { writer_result = buffer.write(&value, 1); });
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        condition.wait(lock, [&] { return writer_blocked; });
+    }
     buffer.cancel();
     writer.join();
     require(!writer_result, "cancelled writer must stop");
