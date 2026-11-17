@@ -21,6 +21,9 @@ for argument in "$@"; do
         continue
     fi
     if [[ "$read_next" == "1" ]]; then
+        if [[ "$argument" == "--" ]]; then
+            continue
+        fi
         printf '%s\n' "$argument" >>"$YOINKS_FIXTURE_LOG"
         # Deliberately invalid CDN host: reject before opening an upstream connection.
         printf '%s\n' 'https://not-googlevideo.example/audio'
@@ -121,7 +124,54 @@ queue_response="$(curl --silent --show-error \
 grep -q '"success":true' <<<"$queue_response"
 grep -q '"queued":3' <<<"$queue_response"
 grep -q '^playlistinfo$' "$mpd_log"
-[[ "$(grep -c '^addid "http://127\.0\.0\.1:18787/stream/[0-9a-f]{32}"$' "$mpd_log")" == "3" ]]
+[[ "$(grep -Ec '^addid "http://127\.0\.0\.1:18787/stream/[0-9a-f]{32}" "$mpd_log")" == "3" ]]
+if grep -q 'googlevideo\|youtube\.com' "$mpd_log"; then
+    echo "MPD must receive only local proxy URLs" >&2
+    exit 1
+fi
+
+# GET every local URI in MPD insertion order; each one must resolve its own video ID.
+grep -Eo '/stream/[0-9a-f]{32}' "$mpd_log" | cut -d/ -f3 >"$stream_ids_file"
+[[ "$(wc -l <"$stream_ids_file")" -eq 3 ]]
+[[ "$(sort -u "$stream_ids_file" | wc -l)" -eq 3 ]]
+stream_body="$(mktemp)"
+while IFS= read -r stream_id; do
+    stream_status="$(curl --silent --show-error -o "$stream_body" -w '%{http_code}' "http://127.0.0.1:$port/stream/$stream_id")"
+    [[ "$stream_status" == "502" ]]
+    grep -q 'stream_activation_failed' "$stream_body"
+done <"$stream_ids_file"
+printf '%s\n' \
+    'https://www.youtube.com/watch?v=qqAYW7uxErI' \
+    'https://www.youtube.com/watch?v=dQw4w9WgXcQ' \
+    'https://www.youtube.com/watch?v=abcdefghijk' >"$resolver_file.expected"
+diff -u "$resolver_file.expected" "$resolver_log"
+rm -f "$stream_body" "$resolver_file.expected"
+
+large_body="$(printf '%*s' 17000 '' | tr ' ' 'a')"
+large_status="$(curl --silent -o /dev/null -w '%{http_code}' \
+    -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+    --data-binary "$large_body" "http://127.0.0.1:$port/api/v1/queue")"
+[[ "$large_status" == "413" ]]
+
+kill -TERM "$server_pid"
+shutdown_complete=0
+for _ in $(seq 1 50); do
+    process_state="$(ps -o stat= -p "$server_pid" 2>/dev/null || true)"
+    if [[ -z "$process_state" || "$process_state" == Z* ]]; then
+        shutdown_complete=1
+        break
+    fi
+    sleep 0.1
+done
+if [[ "$shutdown_complete" -ne 1 ]]; then
+    echo "HTTP server did not shut down after SIGTERM" >&2
+    exit 1
+fi
+wait "$server_pid"
+server_pid=""
+
+echo "HTTP API integration tests passed"
+ "$mpd_log")" == "3" ]]
 if grep -q 'googlevideo\|youtube\.com' "$mpd_log"; then
     echo "MPD must receive only local proxy URLs" >&2
     exit 1
