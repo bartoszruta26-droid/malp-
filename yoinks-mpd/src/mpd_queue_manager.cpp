@@ -279,7 +279,7 @@ MpdPlaylistStateSnapshot MpdQueueManager::listPlaylistState() const {
 
     // MPD command lists keep both read operations in one protocol transaction,
     // preventing a client-side gap between playlistinfo and status.
-    const std::string batch = "command_list_ok_begin\\nplaylistinfo\\nstatus\\ncommand_list_end\\n";
+    const std::string batch = "command_list_ok_begin\nplaylistinfo\nstatus\ncommand_list_end\n";
     if (!writeCommand(stream, batch, deadline)) {
         result.error_code = "mpd_snapshot_write_failed";
         return result;

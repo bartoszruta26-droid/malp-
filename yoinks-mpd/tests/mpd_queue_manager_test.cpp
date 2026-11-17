@@ -75,7 +75,7 @@ private:
                     std::vector<std::string> batch;
                     for (;;) {
                         boost::system::error_code batch_error;
-                        asio::read_until(socket, buffer, '\\n', batch_error);
+                        asio::read_until(socket, buffer, '\n', batch_error);
                         if (batch_error) return;
                         std::istream batch_input(&buffer);
                         std::string batch_line;
@@ -85,13 +85,13 @@ private:
                         batch.push_back(batch_line);
                     }
                     if (batch.size() != 2 || batch[0] != "playlistinfo" || batch[1] != "status") {
-                        send(socket, "ACK [5@0] {command_list} invalid test batch\\n");
+                        send(socket, "ACK [5@0] {command_list} invalid test batch\n");
                         continue;
                     }
                     send(socket,
-                        "file: http://127.0.0.1:8788/stream/0123456789abcdef0123456789abcdef\\n"
-                        "Id: 700\\nPos: 0\\nTitle: Test track\\nlist_OK\\n"
-                        "songid: 700\\nstate: play\\nOK\\n");
+                        "file: http://127.0.0.1:8788/stream/0123456789abcdef0123456789abcdef\n"
+                        "Id: 700\nPos: 0\nTitle: Test track\nlist_OK\n"
+                        "songid: 700\nstate: play\nOK\n");
                 } else if (line.rfind("addid ", 0) == 0) {
                     ++add_count;
                     if (drop_add_response_ && add_count == 1) return;
