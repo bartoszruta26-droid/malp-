@@ -532,3 +532,22 @@ Dokument audytu prototypu zapisuje, że użytkownik uruchomił na Raspberry Pi t
 - niezależnego testu bezpieczeństwa sieciowego.
 
 **Werdykt końcowy:** architektura jest wykonalna pod warunkiem potwierdzenia MPD CURL input i poprawnej implementacji relay. Obecny kod nie spełnia jeszcze celu użytkowego. Najrozsądniejsza droga to najpierw dowód zgodności MPD, następnie C++ HTTP relay z ograniczonym buforem RAM, potem manager kolejki i na końcu pełna integracja Androida. Bezpieczeństwo RAM-only musi być mierzone na systemie docelowym, włącznie ze swap, a nie wywodzone wyłącznie z braku plików w katalogu roboczym.
+
+
+## Aktualizacja wykonania etapów — 2026-11-17
+
+### W0 — ujednolicenie dokumentacji
+
+**Status: wykonano po stronie repozytorium.** Zaktualizowano główny README, dokument Yoinks-MPD, plan kolejnych prac, instrukcję instalacji Raspberry Pi oraz indeks obszaru roboczego. Jednoznacznie wskazano lokalny HTTP relay w C++ i wejście CURL MPD jako architekturę docelową. FIFO pozostało prototypem producenta i nie jest przedstawiane jako wejście MPD.
+
+### W1 — diagnostyka zgodności MPD/CURL
+
+**Status: przygotowano narzędzia; bramka sprzętowa pozostaje otwarta.** Dodano:
+- `scripts/yoinks-mpd/diagnose-mpd-http.sh` — skrypt tylko do odczytu, zbierający wersje MPD/MPC, wskazówki o możliwościach CURL, informacje o swap/zram i montowaniach;
+- `docs/yoinks-mpd/MPD_HTTP_INPUT_DIAGNOSTIC.md` — procedurę bezpiecznego testu HTTP na odizolowanej instancji MPD, bez dotykania produkcyjnej kolejki.
+
+Weryfikacja wykonana w środowisku roboczym: `bash -n` zakończyło się powodzeniem, a uruchomienie skryptu potwierdziło jego działanie. Środowisko robocze nie ma zainstalowanego MPD ani MPC, więc nie mogło potwierdzić wejścia CURL ani odtwarzania. **Nie wykonano testu na Raspberry Pi i nie deklaruje się zaliczenia W1.**
+
+### Następny warunek blokujący
+
+Przed implementacją C++ relay należy otrzymać z docelowego Raspberry Pi raport diagnostyczny oraz wynik odtwarzania krótkiego, znanego strumienia HTTP na osobnej instancji MPD. Do tego czasu nie należy zmieniać produkcyjnej kolejki MPD ani implementować założeń o obsłudze HEAD/Range/seek bez obserwacji rzeczywistego klienta.
