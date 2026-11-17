@@ -88,6 +88,12 @@ if(YOINKS_MPD_BUILD_TESTS)
         $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic;-Werror>
     )
     add_test(NAME youtube_queue_service COMMAND yoinks_mpd_youtube_queue_service_tests)
+    add_executable(yoinks_mpd_mock_mpd tests/mock_mpd_server.cpp)
+    target_link_libraries(yoinks_mpd_mock_mpd PRIVATE Threads::Threads)
+    target_compile_options(yoinks_mpd_mock_mpd PRIVATE
+        $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic;-Werror>
+    )
     add_test(NAME http_api_integration
-        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/http_api_test.sh $<TARGET_FILE:yoinks-mpd>)
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/http_api_test.sh
+            $<TARGET_FILE:yoinks-mpd> $<TARGET_FILE:yoinks_mpd_mock_mpd>)
 endif()
