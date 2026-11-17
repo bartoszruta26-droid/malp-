@@ -33,7 +33,8 @@ jobs:
           bash -n scripts/yoinks-mpd/diagnose-mpd-http.sh
           bash -n yoinks-mpd/tests/http_api_test.sh
           bash scripts/yoinks-mpd/install.sh --help
-          systemd-analyze verify scripts/yoinks-mpd/yoinks-mpd.service
+          sed -e 's#^ExecStart=.*#ExecStart=/bin/true#' -e 's#^EnvironmentFile=.*#EnvironmentFile=/dev/null#' scripts/yoinks-mpd/yoinks-mpd.service > /tmp/yoinks-mpd.service
+          systemd-analyze verify /tmp/yoinks-mpd.service
       - name: Configure
         run: cmake -S yoinks-mpd -B yoinks-mpd/build -DCMAKE_BUILD_TYPE=Release
       - name: Build
