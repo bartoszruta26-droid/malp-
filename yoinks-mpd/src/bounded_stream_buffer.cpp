@@ -13,8 +13,9 @@ namespace yoinks {
 BoundedStreamBuffer::BoundedStreamBuffer(
         const std::size_t capacity,
         std::function<void()> before_writer_wait_for_tests)
-    : capacity_(capacity), storage_(capacity),
-      before_writer_wait_for_tests_(std::move(before_writer_wait_for_tests)) {
+    : capacity_(capacity),
+      before_writer_wait_for_tests_(std::move(before_writer_wait_for_tests)),
+      storage_(capacity) {
     if (capacity == 0) {
         throw std::invalid_argument("stream buffer capacity must be positive");
     }
