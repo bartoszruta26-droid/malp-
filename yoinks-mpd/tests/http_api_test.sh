@@ -43,7 +43,7 @@ for argument in "$@"; do
         if [[ "$argument" == "--" ]]; then
             continue
         fi
-        printf '%s\n' "$argument" >>"$YOINKS_FIXTURE_LOG"
+        printf '%s\n' "$argument" >>"__YOINKS_FIXTURE_LOG__"
         printf '%s\n' 'https://not-googlevideo.example/audio'
         exit 0
     fi
@@ -51,6 +51,7 @@ done
 printf '%s\n' '{"entries":[{"id":"qqAYW7uxErI","title":"Playlist item 1","duration":1},{"id":"dQw4w9WgXcQ","title":"Playlist item 2","duration":1},{"id":"abcdefghijk","title":"Playlist item 3","duration":1}]}'
 RESOLVER
 chmod 700 "$resolver_file"
+sed -i "s|__YOINKS_FIXTURE_LOG__|$resolver_log|g" "$resolver_file"
 
 "$mock_mpd_binary" "$mpd_port" "$mpd_log" >/dev/null 2>"$log_file" &
 mpd_pid=$!
@@ -64,7 +65,7 @@ for _ in $(seq 1 50); do
 done
 [[ "$mpd_ready" == "1" ]]
 
-YOINKS_MPD_TOKEN="$token" YOINKS_MPD_PORT="$port" YOINKS_MPD_MPD_PORT="$mpd_port" YOINKS_MPD_YTDLP="$resolver_file" YOINKS_FIXTURE_LOG="$resolver_log" "$binary" >/dev/null 2>>"$log_file" &
+YOINKS_MPD_TOKEN="$token" YOINKS_MPD_PORT="$port" YOINKS_MPD_MPD_PORT="$mpd_port" YOINKS_MPD_YTDLP="$resolver_file" "$binary" >/dev/null 2>>"$log_file" &
 server_pid=$!
 ready=0
 for _ in $(seq 1 50); do
