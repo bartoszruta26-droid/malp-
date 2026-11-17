@@ -47,6 +47,7 @@ import android.widget.RelativeLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.ActionBarDrawerToggle;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.Toolbar;
@@ -96,12 +97,10 @@ import org.gateshipone.malp.application.fragments.serverfragments.TagSelectFragm
 import org.gateshipone.malp.application.utils.PermissionHelper;
 import org.gateshipone.malp.application.utils.ThemeUtils;
 import org.gateshipone.malp.application.views.CurrentPlaylistView;
-import org.gateshipone.malp.application.views.NowPlayingView;
 import org.gateshipone.malp.application.youtube.YouTubeShareParser;
 import org.gateshipone.malp.application.youtube.YouTubeAudioBridgeClient;
 import org.gateshipone.malp.application.youtube.YouTubeBridgePreferences;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import org.gateshipone.malp.application.views.NowPlayingView;
 import org.gateshipone.malp.mpdservice.ConnectionManager;
