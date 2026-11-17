@@ -8,6 +8,8 @@ on:
       - "scripts/yoinks-mpd/yoinks-mpd.service"
       - "scripts/yoinks-mpd/INSTALL.md"
       - "scripts/yoinks-mpd/diagnose-mpd-http.sh"
+      - "work/youtube-audio-bridge/AUDYT_ARCHITEKTURY_I_PLAN_REALIZACJI.md"
+      - "docs/yoinks-mpd/README.md"
       - ".github/workflows/yoinks-mpd-core.yml"
   pull_request:
     paths:
