@@ -327,3 +327,14 @@ Nie publikować APK jako „gotowego do instalacji” na podstawie samego CI. Wy
 - CI run 44090166568 completed successfully for commit 2d0176dd18407ce5995c6a4defdefc0a247bc75b. C++ compilation succeeded and all 10/10 CTest tests passed, including playlist ordering, authenticated HTTP queueing, actual libcurl TLS verification, and byte-for-byte proxy output.
 - This verifies the HTTP → yt-dlp fixture → HTTPS/libcurl → bounded RAM buffer → local chunked HTTP path and MPD queue insertion against a mock MPD. It does not yet verify a live YouTube/googlevideo response or playback on the Raspberry Pi's MPD daemon.
 - Test-only CA and connect-to settings are internal configuration fields and are not read from environment variables by the production executable. Only the dedicated test fixture server supplies them.
+
+
+### Real MPD daemon playback integration — 2026-11-17
+
+- Added `tests/http_mpd_daemon_test.sh` and registered `real_mpd_http_proxy_playback` in CTest. CI installs the distribution MPD daemon and `mpc` client; no production MPD instance or user queue is touched.
+- The test starts a private MPD daemon bound to loopback with a null audio output and temporary database/state/playlist files. It starts a temporary HTTPS fixture whose certificate SAN is `rr1.googlevideo.com`, and a deterministic yt-dlp executable that resolves a local WAV fixture.
+- The normal libcurl path validates TLS using the temporary CA bundle and test-only CURLOPT_CONNECT_TO mapping. The bridge creates a local opaque HTTP proxy URI, and the real MPD daemon is asked to play it via `play_now`.
+- CI run `44090982855`, commit `cd03e24c81db60e2e017ac640fc2374754ad592b`, completed successfully: build passed and all 11/11 CTest tests passed. In particular, `real_mpd_http_proxy_playback` passed, confirming MPD entered `playing` for the proxied WAV stream and its playlist contained the loopback proxy URI rather than a CDN URL.
+- A subsequent hardening change in commit `177643772e25d5dd0af8708bff54df8db1d645e9` makes the real-daemon test fail early unless the installed MPD build advertises its CURL input plugin. CI run `44091039138` is validating that exact latest branch head; its result is pending at the time of this audit update.
+- This is a real MPD daemon playback test, but still uses deterministic local HTTPS/WAV fixtures and a fake yt-dlp executable. Live YouTube resolution/CDN retrieval, target Raspberry Pi MPD build compatibility, real audio output hardware and audible playback remain unverified.
+- No production MPD configuration, service, playlist, queue, or Android APK was modified or deployed.
