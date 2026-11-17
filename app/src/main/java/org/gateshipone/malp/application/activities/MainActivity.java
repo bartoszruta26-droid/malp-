@@ -100,6 +100,7 @@ import org.gateshipone.malp.application.views.CurrentPlaylistView;
 import org.gateshipone.malp.application.youtube.YouTubeShareParser;
 import org.gateshipone.malp.application.youtube.YouTubeAudioBridgeClient;
 import org.gateshipone.malp.application.youtube.YouTubeBridgePreferences;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
