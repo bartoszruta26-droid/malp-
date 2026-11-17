@@ -251,3 +251,6 @@ All six reported cases passed: binary FIFO transfer and cleanup; playlist reject
 - Added a test-only notification seam to `BoundedStreamBuffer`, invoked only when a writer is actually blocked by a full buffer. The callback must only signal an external test condition and must not re-enter the buffer while its mutex is held.
 - Back-pressure drain and cancellation tests now wait for confirmed writer blocking before reading/cancelling. This removes scheduler-dependent assumptions from those tests while leaving default production construction unchanged.
 - The new buffer-test revision requires its own Release and ASan/UBSan CI pass.
+
+
+- **Intermediate CI finding:** the first build of the buffer-test change failed under `-Werror=reorder` because the constructor initializer list did not follow member declaration order. Corrected the initializer order; no runtime algorithm change. The final combined commit must pass Release and ASan/UBSan CI before this stage is accepted.
