@@ -24,11 +24,11 @@ ctest --test-dir yoinks-mpd/build --output-on-failure
 
 ## Not implemented yet
 
-- Bounded HTTPS upstream producer to RAM (implemented; local MPD-facing HTTP streaming endpoint and session registry pending).
+- Bounded HTTPS upstream producer to RAM and a local chunked HTTP stream endpoint at `/stream/{opaque-id}`.
 - Control API routing and Bearer token verification.
 - yt-dlp resolver and playlist expansion.
 - MPD protocol queue manager.
-- Stable stream-session registry, source URL refresh and request cancellation.
+- Stream-session registry with opaque random IDs, bounded RAM allocation and cancellation; resolver-driven source URL refresh remains pending.
 - systemd service, resource limits and Raspberry Pi installation.
 - MPD CURL compatibility and real device playback.
 
