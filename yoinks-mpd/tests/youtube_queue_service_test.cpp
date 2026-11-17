@@ -56,7 +56,7 @@ void testPlayNowIsReportedOnlyAfterQueueConfirmation() {
             result.success = play_now;
             result.queued = play_now ? 1 : 0;
             return result;
-        }});
+        }, {}});
     const auto result = service.enqueue("https://youtu.be/abcdefghijk", true);
     require(result.success && result.started && result.queued == 1,
             "play-now must be reported only after MPD confirms the operation");
@@ -69,7 +69,7 @@ void testKnownRollbackRemovesCapabilities() {
         [](const std::vector<std::string>&, bool) {
             yoinks::MpdQueueResult result; result.error_code = "mpd_add_rejected";
             result.rollback_complete = true; return result;
-        }});
+        }, {}});
     const auto result = service.enqueue("https://youtu.be/abcdefghijk", false);
     require(!result.success && result.rollback_complete, "known rollback must fail closed");
     require(sessions->size() == 0, "rolled-back entries must be removed");
@@ -82,7 +82,7 @@ void testUnknownOutcomeRetainsCapabilities() {
         [](const std::vector<std::string>&, bool) {
             yoinks::MpdQueueResult result; result.error_code = "mpd_add_outcome_unknown";
             result.rollback_complete = false; result.queued = 1; return result;
-        }});
+        }, {}});
     const auto result = service.enqueue("https://youtu.be/abcdefghijk", false);
     require(!result.success && !result.rollback_complete && result.queued == 1,
             "ambiguous MPD result must not be reported as success");
@@ -138,7 +138,7 @@ void testPlaylistLimitAndMetadataFailure() {
             "playlist above 200 must be rejected");
     yoinks::YoutubeQueueService failed({8788, 200, sessions,
         [](const std::string&) { yoinks::MetadataResult value; value.error_code = "extractor_failed"; return value; },
-        [](const std::vector<std::string>&, bool) { return yoinks::MpdQueueResult{}; }});
+        [](const std::vector<std::string>&, bool) { return yoinks::MpdQueueResult{}; }, {}});
     result = failed.enqueue("https://youtu.be/abcdefghijk", false);
     require(!result.success && result.error_code == "extractor_failed" && sessions->size() == 0,
             "metadata failure must not create sessions");
