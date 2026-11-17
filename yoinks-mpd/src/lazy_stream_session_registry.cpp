@@ -141,6 +141,17 @@ void LazyStreamSessionRegistry::clear() {
     for (auto& item : removed) if (item.second.stream) item.second.stream->wait();
 }
 
+bool LazyStreamSessionRegistry::contains(const std::string& id) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return sessions_.find(id) != sessions_.end();
+}
+
+bool LazyStreamSessionRegistry::isFailed(const std::string& id) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    const auto found = sessions_.find(id);
+    return found != sessions_.end() && found->second.failed;
+}
+
 std::size_t LazyStreamSessionRegistry::size() const {
     std::lock_guard<std::mutex> lock(mutex_); return sessions_.size();
 }
