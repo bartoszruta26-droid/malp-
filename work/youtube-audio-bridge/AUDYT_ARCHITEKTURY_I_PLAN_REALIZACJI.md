@@ -812,3 +812,9 @@ Zmiany oczekują na wynik GitHub Actions. Testy nie łączą się z YouTube i ni
 2. Dodać testy anulowania przy zamykaniu klienta i przy shutdown serwera.
 3. Następnie zaprojektować transakcyjny MPD queue manager bez czyszczenia istniejącej kolejki i bez zmiany trybów odtwarzania.
 4. Przed integracją odtwarzania sprawdzić rzeczywiste żądania MPD CURL (HEAD/Range/reconnect) na Raspberry Pi w osobnym, nieprodukcyjnym teście.
+
+### Wynik CI — anulowanie resolvera
+
+Commit testowy `cfa8a0fb882d6ae0c1dff24475331f0d4d61cc06` uzyskał `build-and-test: success` w GitHub Actions (run `44048522129`, job `133920152708`, zakończony 2026-11-17 08:39:49 UTC). Kompilacja C++ zakończyła się powodzeniem, a CTest: **6/6 PASS** (`bounded_stream_buffer`, `http_upstream_validation`, `stream_session_registry`, `chunked_stream_writer`, `yt_dlp_resolver`, `http_api_integration`). Test `yt_dlp_resolver` przeszedł w 0,21 s i obejmuje anulowanie działającego procesu.
+
+Dowód dotyczy runnera GitHub Actions x86_64. Nie wykonano nowego builda na Raspberry Pi ani testu z MPD CURL. Commit dokumentacyjny `454b7b5...` i commit audytu są późniejsze, ale nie zmieniają kodu C++; kodowy commit objęty wynikiem CI to `cfa8a0f...`.
