@@ -23,12 +23,15 @@ void require(bool condition, const std::string& message) {
 
 class IdleFixture final {
 public:
-    explicit IdleFixture(std::string response, std::chrono::milliseconds delay = std::chrono::milliseconds{0},
-                         bool send_response = true, std::string greeting = "OK MPD 0.23.15\\n",\n                         bool expect_command = true)
+    explicit IdleFixture(std::string response,
+                         std::chrono::milliseconds delay = std::chrono::milliseconds{0},
+                         bool send_response = true,
+                         std::string greeting = "OK MPD 0.23.15\n",
+                         bool expect_command = true)
         : acceptor_(context_, tcp::endpoint{asio::ip::address_v4::loopback(), 0}),
           response_(std::move(response)), delay_(delay), send_response_(send_response),
-          greeting_(std::move(greeting)), expect_command_(expect_command),\n          port_(acceptor_.local_endpoint().port()),
-          worker_([this]() { serve(); }) {}
+          greeting_(std::move(greeting)), expect_command_(expect_command),
+          port_(acceptor_.local_endpoint().port()), worker_([this]() { serve(); }) {}
 
     ~IdleFixture() {
         if (worker_.joinable()) {
@@ -50,7 +53,8 @@ private:
         try {
             tcp::socket socket(context_);
             acceptor_.accept(socket);
-            asio::write(socket, asio::buffer(std::string{"OK MPD 0.23.15\n"}));
+            asio::write(socket, asio::buffer(greeting_));
+            if (!expect_command_) return;
             asio::streambuf buffer;
             asio::read_until(socket, buffer, '\n');
             std::istream input(&buffer);
@@ -117,7 +121,7 @@ void testIdleSubscriptionTimesOut() {
 }
 
 void testRejectsInvalidGreeting() {
-    IdleFixture fixture("", std::chrono::milliseconds{0}, false, "NOT MPD\\n", false);
+    IdleFixture fixture("", std::chrono::milliseconds{0}, false, "NOT MPD\n", false);
     yoinks::MpdPlaylistWatchConfig config;
     config.port = fixture.port();
     config.operation_timeout_milliseconds = 1000;
@@ -129,7 +133,7 @@ void testRejectsInvalidGreeting() {
 }
 
 void testRejectsIdleAck() {
-    IdleFixture fixture("ACK [5@0] {} unknown command\\n");
+    IdleFixture fixture("ACK [5@0] {} unknown command\n");
     yoinks::MpdPlaylistWatchConfig config;
     config.port = fixture.port();
     config.operation_timeout_milliseconds = 1000;
