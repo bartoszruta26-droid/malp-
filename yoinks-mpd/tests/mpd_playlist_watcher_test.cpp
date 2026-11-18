@@ -71,6 +71,7 @@ private:
     std::chrono::milliseconds delay_;
     bool send_response_;
     std::string greeting_;
+    bool expect_command_;
     std::uint16_t port_;
     std::thread worker_;
     std::string command_;
