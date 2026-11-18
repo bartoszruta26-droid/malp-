@@ -1196,3 +1196,13 @@ Dodano testy protokołu dla zdarzenia playlisty, zdarzenia niezwiązanego z play
 - Dodano test ograniczenia czasu subskrypcji `idle`: brak odpowiedzi po przyjęciu komendy musi być raportowany jako normalny timeout, bez kodu błędu transportowego.
 - Zaktualizowano README i instrukcję instalacji, aby opisywały aktualny stan obserwatora oraz domyślne wyłączenie. Wcześniejsza informacja w README o braku implementacji obserwatora była nieaktualna.
 - Nadal otwarte: test cyklu życia workera w pełnym serwerze, deterministyczne testy reconnect/backoff, kontrolowana akceptacja surowego URL YouTube przez docelowy MPD oraz implementacja konwersji wyłącznie przyszłych pozycji. Brak zgody na włączenie workera na urządzeniu produkcyjnym lub zmianę kolejki.
+
+
+## Dodatkowe testy odporności protokołu obserwatora — 2026-11-18
+
+- Rozszerzono atrapę MPD o możliwość podania własnego powitania protokołu.
+- Dodano test odrzucenia nieprawidłowego powitania MPD, test odpowiedzi `ACK` na komendę `idle playlist` oraz test odmowy połączenia na zwolnionym porcie loopback.
+- Testy nie łączą się z urządzeniem produkcyjnym, nie wysyłają komend modyfikujących kolejkę i nie uruchamiają playback.
+- Commit `2a0a7d3884597121182e41d3508d58fb723c0267` — GitHub Actions run `44167671470`: **success** dla kompilacji, CTest i konfiguracji/testów ASan/UBSan.
+- Nowe przypadki wymagają osobnego CI. Testy obejmują zachowanie jednorazowego transportu, nie pełny cykl życia workera ani politykę ponownego łączenia.
+- Następny bezpieczny etap: test integracyjny cyklu życia workera z kontrolowanym serwerem MPD (start, zdarzenie playlisty, rozłączenie, ponowienie i zamknięcie). Do tego czasu obserwator pozostaje domyślnie wyłączony, bez konwersji URL i bez ingerencji w playlistę.

@@ -24,10 +24,11 @@ void require(bool condition, const std::string& message) {
 class IdleFixture final {
 public:
     explicit IdleFixture(std::string response, std::chrono::milliseconds delay = std::chrono::milliseconds{0},
-                         bool send_response = true)
+                         bool send_response = true, std::string greeting = "OK MPD 0.23.15\\n")
         : acceptor_(context_, tcp::endpoint{asio::ip::address_v4::loopback(), 0}),
           response_(std::move(response)), delay_(delay), send_response_(send_response),
-          port_(acceptor_.local_endpoint().port()), worker_([this]() { serve(); }) {}
+          greeting_(std::move(greeting)), port_(acceptor_.local_endpoint().port()),
+          worker_([this]() { serve(); }) {}
 
     ~IdleFixture() {
         if (worker_.joinable()) {
@@ -69,6 +70,7 @@ private:
     std::string response_;
     std::chrono::milliseconds delay_;
     bool send_response_;
+    std::string greeting_;
     std::uint16_t port_;
     std::thread worker_;
     std::string command_;
@@ -113,6 +115,47 @@ void testIdleSubscriptionTimesOut() {
             "idle deadline must be reported as a normal timeout, not a transport failure");
 }
 
+void testRejectsInvalidGreeting() {
+    IdleFixture fixture("", std::chrono::milliseconds{0}, false, "NOT MPD\\n");
+    yoinks::MpdPlaylistWatchConfig config;
+    config.port = fixture.port();
+    config.operation_timeout_milliseconds = 1000;
+    yoinks::MpdPlaylistWatcher watcher(config);
+    const auto result = watcher.waitForPlaylistChange();
+    fixture.join();
+    require(!result.success && result.error_code == "mpd_protocol_greeting_invalid",
+            "watcher must reject a non-MPD protocol greeting");
+}
+
+void testRejectsIdleAck() {
+    IdleFixture fixture("ACK [5@0] {} unknown command\\n");
+    yoinks::MpdPlaylistWatchConfig config;
+    config.port = fixture.port();
+    config.operation_timeout_milliseconds = 1000;
+    yoinks::MpdPlaylistWatcher watcher(config);
+    const auto result = watcher.waitForPlaylistChange();
+    fixture.join();
+    require(!result.success && result.error_code == "mpd_idle_rejected",
+            "MPD ACK must be returned as a protocol rejection");
+}
+
+void testConnectFailureIsReported() {
+    asio::io_context context;
+    tcp::acceptor reservation(context, tcp::endpoint{asio::ip::address_v4::loopback(), 0});
+    const auto port = reservation.local_endpoint().port();
+    boost::system::error_code close_error;
+    reservation.close(close_error);
+    require(!close_error, "test must release its reserved loopback port");
+
+    yoinks::MpdPlaylistWatchConfig config;
+    config.port = port;
+    config.operation_timeout_milliseconds = 1000;
+    yoinks::MpdPlaylistWatcher watcher(config);
+    const auto result = watcher.waitForPlaylistChange();
+    require(!result.success && result.error_code == "mpd_connect_failed",
+            "connection refusal must be reported with a stable non-sensitive error code");
+}
+
 void testRejectsNonLoopbackHost() {
     yoinks::MpdPlaylistWatchConfig config;
     config.host = "192.0.2.10";
@@ -128,6 +171,9 @@ int main() {
         testIdlePlaylistNotification();
         testIdleWithoutPlaylistChange();
         testIdleSubscriptionTimesOut();
+        testRejectsInvalidGreeting();
+        testRejectsIdleAck();
+        testConnectFailureIsReported();
         testRejectsNonLoopbackHost();
         std::cout << "All MPD playlist watcher tests passed\n";
         return 0;
